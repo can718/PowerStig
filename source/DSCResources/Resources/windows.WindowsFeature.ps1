@@ -15,6 +15,15 @@ foreach ($rule in $rules)
         $rule.Name = 'FS-SMB1'
     }
 
+    # A feature that does not exist on this OS (for example PNRP on Server 2025) makes Test-TargetResource throw.
+    if ($rule.Ensure -eq 'Absent' -and
+        (Get-Command -Name Get-WindowsFeature -ErrorAction SilentlyContinue) -and
+        -not (Get-WindowsFeature -Name $rule.Name -ErrorAction SilentlyContinue))
+    {
+        Write-Warning "Skipping Windows feature rule $($rule.id): feature '$($rule.Name)' does not exist on this system."
+        continue
+    }
+
     WindowsFeature (Get-ResourceTitle -Rule $rule)
     {
         Name   = $rule.Name

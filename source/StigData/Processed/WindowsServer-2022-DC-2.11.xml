@@ -4236,13 +4236,67 @@ BUILTIN\Administrators:(I)(F)
     <Rule id="V-254392" severity="high" conversionstatus="pass" title="SRG-OS-000324-GPOS-00125" dscresource="NTFSAccessEntry">
       <AccessControlEntry>
         <Entry>
-          <Type>
-          </Type>
-          <Principal>(RX)</Principal>
+          <Type>Allow</Type>
+          <Principal>NT AUTHORITY\Authenticated Users</Principal>
           <ForcePrincipal>False</ForcePrincipal>
-          <Inheritance>
-          </Inheritance>
+          <Inheritance>This folder only</Inheritance>
           <Rights>ReadAndExecute</Rights>
+        </Entry>
+        <Entry>
+          <Type>Allow</Type>
+          <Principal>NT AUTHORITY\Authenticated Users</Principal>
+          <ForcePrincipal>False</ForcePrincipal>
+          <Inheritance>Subfolders and files only</Inheritance>
+          <Rights>ReadAndExecute</Rights>
+        </Entry>
+        <Entry>
+          <Type>Allow</Type>
+          <Principal>BUILTIN\Server Operators</Principal>
+          <ForcePrincipal>False</ForcePrincipal>
+          <Inheritance>This folder only</Inheritance>
+          <Rights>ReadAndExecute</Rights>
+        </Entry>
+        <Entry>
+          <Type>Allow</Type>
+          <Principal>BUILTIN\Server Operators</Principal>
+          <ForcePrincipal>False</ForcePrincipal>
+          <Inheritance>Subfolders and files only</Inheritance>
+          <Rights>ReadAndExecute</Rights>
+        </Entry>
+        <Entry>
+          <Type>Allow</Type>
+          <Principal>BUILTIN\Administrators</Principal>
+          <ForcePrincipal>False</ForcePrincipal>
+          <Inheritance>This folder only</Inheritance>
+          <Rights>AppendData,ChangePermissions,CreateDirectories,CreateFiles,Delete,DeleteSubdirectoriesAndFiles,ExecuteFile,ListDirectory,Modify,Read,ReadAndExecute,ReadAttributes,ReadData,ReadExtendedAttributes,ReadPermissions,Synchronize,TakeOwnership,Traverse,Write,WriteAttributes,WriteData,WriteExtendedAttributes</Rights>
+        </Entry>
+        <Entry>
+          <Type>Allow</Type>
+          <Principal>BUILTIN\Administrators</Principal>
+          <ForcePrincipal>False</ForcePrincipal>
+          <Inheritance>Subfolders and files only</Inheritance>
+          <Rights>FullControl</Rights>
+        </Entry>
+        <Entry>
+          <Type>Allow</Type>
+          <Principal>NT AUTHORITY\SYSTEM</Principal>
+          <ForcePrincipal>False</ForcePrincipal>
+          <Inheritance>This folder only</Inheritance>
+          <Rights>FullControl</Rights>
+        </Entry>
+        <Entry>
+          <Type>Allow</Type>
+          <Principal>NT AUTHORITY\SYSTEM</Principal>
+          <ForcePrincipal>False</ForcePrincipal>
+          <Inheritance>Subfolders and files only</Inheritance>
+          <Rights>FullControl</Rights>
+        </Entry>
+        <Entry>
+          <Type>Allow</Type>
+          <Principal>CREATOR OWNER</Principal>
+          <ForcePrincipal>False</ForcePrincipal>
+          <Inheritance>Subfolders and files only</Inheritance>
+          <Rights>FullControl</Rights>
         </Entry>
       </AccessControlEntry>
       <Description>&lt;VulnDiscussion&gt;Improper access permissions for directory data files could allow unauthorized users to read, modify, or delete directory data.

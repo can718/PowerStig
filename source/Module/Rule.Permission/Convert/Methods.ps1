@@ -277,6 +277,71 @@ function Get-PermissionAccessControlEntry
             return ConvertTo-FileSystemAuditRule -CheckContent $stigString
         }
 
+        {
+            ($stigString -join "`n") -match $regularExpression.SysVol -and
+            ($stigString -join "`n") -notmatch 'Type\s*-'
+        }
+        {
+            $icaclsRights = @{
+                'RX'       = 'ReadAndExecute'
+                'GR,GE'    = 'ReadAndExecute'
+                'F'        = 'FullControl'
+                'OI,CI,IO,F' = 'FullControl'
+                'M,WDAC,WO' = 'AppendData,ChangePermissions,CreateDirectories,CreateFiles,Delete,DeleteSubdirectoriesAndFiles,ExecuteFile,ListDirectory,Modify,Read,ReadAndExecute,ReadAttributes,ReadData,ReadExtendedAttributes,ReadPermissions,Synchronize,TakeOwnership,Traverse,Write,WriteAttributes,WriteData,WriteExtendedAttributes'
+            }
+            $sysvolEntries = @()
+            $seenEntries = @{}
+            foreach ($line in $stigString)
+            {
+                $aceMatch = [regex]::Match($line.Trim(), '^(?<principal>[^:]+):(?<ace>(?:\([^)]+\))+)\s*$')
+                if ($aceMatch.Success)
+                {
+                    $aceParts = @([regex]::Matches($aceMatch.Groups['ace'].Value, '\(([^)]+)\)') | ForEach-Object { $_.Groups[1].Value })
+                    $right = $aceParts[-1]
+                    $inheritanceFlags = @($aceParts | Select-Object -SkipLast 1)
+                    $inheritance = if ($inheritanceFlags -contains 'IO')
+                    {
+                        'Subfolders and files only'
+                    }
+                    elseif (($inheritanceFlags -contains 'OI') -and ($inheritanceFlags -contains 'CI'))
+                    {
+                        'This folder subfolders and files'
+                    }
+                    else
+                    {
+                        'This folder only'
+                    }
+
+                    $rightsKey = if ($inheritanceFlags.Count -gt 0) { ($inheritanceFlags + $right) -join ',' } else { $right }
+                    if (-not $icaclsRights.ContainsKey($rightsKey))
+                    {
+                        $rightsKey = $right
+                    }
+                    if (-not $icaclsRights.ContainsKey($rightsKey))
+                    {
+                        continue
+                    }
+
+                    $principal = $aceMatch.Groups['principal'].Value.Trim()
+                    $entryKey = "$principal|$inheritance|$($icaclsRights[$rightsKey])"
+                    if ($seenEntries.ContainsKey($entryKey))
+                    {
+                        continue
+                    }
+                    $seenEntries[$entryKey] = $true
+                    $sysvolEntries += [pscustomobject]@{
+                        Principal      = $principal
+                        ForcePrincipal = Get-ForcePrincipal -StigString $stigString
+                        Rights         = $icaclsRights[$rightsKey]
+                        Inheritance    = $inheritance
+                        Type           = 'Allow'
+                    }
+                }
+            }
+
+            return $sysvolEntries
+        }
+
         default
         {
             return ConvertTo-AccessControlEntry -StigString $stigString

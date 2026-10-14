@@ -166,7 +166,7 @@ try
         try
         {
             $archiveWorkingPath = Join-Path -Path $workingRoot -ChildPath $archive.BaseName
-            Expand-Archive -LiteralPath $archive.FullName -DestinationPath $archiveWorkingPath -Force
+            Expand-Archive -LiteralPath $archive.FullName -DestinationPath $archiveWorkingPath -Force -WhatIf:$false
             $xccdfFiles = @(Get-ChildItem -LiteralPath $archiveWorkingPath -Filter '*-xccdf.xml' -File -Recurse)
 
             if ($xccdfFiles.Count -ne 1)

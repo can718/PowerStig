@@ -240,7 +240,7 @@ try
                 Run `"icacls /help`" to view definitions of other permission codes."
             },
             @{
-                Path = $null
+                Path = '%windir%\NTDS\*.*'
                 AccessControlEntry = @(
                     [pscustomobject]@{
                         Rights         = 'FullControl'
@@ -250,7 +250,7 @@ try
                     }
                 )
                 Force = $true
-                ConversionStatus = 'fail'
+                ConversionStatus = 'pass'
                 OrganizationValueRequired = $false
                 CheckContent = 'Verify the permissions on the content of the NTDS directory.
                 Open the registry editor (regedit).
@@ -277,6 +277,41 @@ try
         }
 
         #region Add Custom Tests Here
+        Describe 'SYSVOL icacls permission parsing' {
+            It 'preserves all distinct principals, rights, and inheritance scopes' {
+                $checkContent = @(
+                    'Verify permissions on Windows\SYSVOL.'
+                    'NT AUTHORITY\Authenticated Users:(RX)'
+                    'NT AUTHORITY\Authenticated Users:(OI)(CI)(IO)(GR,GE)'
+                    'BUILTIN\Server Operators:(RX)'
+                    'BUILTIN\Server Operators:(OI)(CI)(IO)(GR,GE)'
+                    'BUILTIN\Administrators:(M,WDAC,WO)'
+                    'BUILTIN\Administrators:(M,WDAC,WO)'
+                    'BUILTIN\Administrators:(OI)(CI)(IO)(F)'
+                    'NT AUTHORITY\SYSTEM:(F)'
+                    'NT AUTHORITY\SYSTEM:(OI)(CI)(IO)(F)'
+                    'CREATOR OWNER:(OI)(CI)(IO)(F)'
+                    '(RX) - Read & execute'
+                )
+                $entries = @(Get-PermissionAccessControlEntry -StigString $checkContent)
+                $actual = @($entries | ForEach-Object { '{0}|{1}|{2}' -f $_.Principal, $_.Inheritance, $_.Rights } | Sort-Object)
+                $expected = @(
+                    'NT AUTHORITY\Authenticated Users|This folder only|ReadAndExecute'
+                    'NT AUTHORITY\Authenticated Users|Subfolders and files only|ReadAndExecute'
+                    'BUILTIN\Server Operators|This folder only|ReadAndExecute'
+                    'BUILTIN\Server Operators|Subfolders and files only|ReadAndExecute'
+                    'BUILTIN\Administrators|This folder only|AppendData,ChangePermissions,CreateDirectories,CreateFiles,Delete,DeleteSubdirectoriesAndFiles,ExecuteFile,ListDirectory,Modify,Read,ReadAndExecute,ReadAttributes,ReadData,ReadExtendedAttributes,ReadPermissions,Synchronize,TakeOwnership,Traverse,Write,WriteAttributes,WriteData,WriteExtendedAttributes'
+                    'BUILTIN\Administrators|Subfolders and files only|FullControl'
+                    'NT AUTHORITY\SYSTEM|This folder only|FullControl'
+                    'NT AUTHORITY\SYSTEM|Subfolders and files only|FullControl'
+                    'CREATOR OWNER|Subfolders and files only|FullControl'
+                ) | Sort-Object
+
+                $entries.Count | Should -Be 9
+                ($actual -join "`n") | Should -Be ($expected -join "`n")
+            }
+        }
+
         Describe 'MultipleRules' {
             # TODO move this to the CommonTests
             $testRuleList = @(

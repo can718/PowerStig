@@ -1,0 +1,142 @@
+name: PowerStig dev offline package
+
+on:
+  push:
+    branches:
+      - dev
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-package:
+    name: Build, test, and package
+    runs-on: windows-2022
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Restore build dependencies
+        shell: powershell
+        run: .\build.ps1 -ResolveDependency -Tasks noop
+
+      - name: Build and run unit tests
+        shell: powershell
+        run: .\build.ps1
+
+      - name: Convert STIG data
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\Tools\StigUpdate\Invoke-StigUpdate.ps1 -WhatIf
+          .\Tools\StigUpdate\Invoke-StigUpdate.ps1 -Verbose
+
+          $report = Get-Content .\Tools\StigUpdate\last-update-report.json -Raw | ConvertFrom-Json
+          if (-not $report.Succeeded) {
+              throw 'STIG conversion failed; inspect Tools\StigUpdate\last-update-report.json.'
+          }
+
+          $failedItems = @($report.Items | Where-Object Status -ne 'Converted')
+          if ($failedItems.Count -gt 0) {
+              $failedItems | Format-Table Archive, Status, Error | Out-String | Write-Error
+          }
+
+      - name: Export module and restore exact runtime dependencies
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\Tools\StigUpdate\Export-PowerStigModule.ps1 -Destination .\output -Force
+
+          $manifest = Import-PowerShellDataFile .\source\PowerStig.psd1
+          foreach ($dependency in $manifest.RequiredModules) {
+              $version = [version] $dependency.ModuleVersion
+              $expectedPath = Join-Path $PWD "output\$($dependency.ModuleName)\$version"
+              if (-not (Test-Path -LiteralPath $expectedPath -PathType Container)) {
+                  Save-Module `
+                      -Name $dependency.ModuleName `
+                      -RequiredVersion $version `
+                      -Path .\output `
+                      -Force
+              }
+          }
+
+      - name: Create and smoke-test offline package
+        id: package
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\Tools\Deployment\New-PowerStigOfflinePackage.ps1 -ModuleRoot .\output -Force
+
+          $version = (Import-PowerShellDataFile .\source\PowerStig.psd1).ModuleVersion
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "version=$version$([Environment]::NewLine)", [Text.UTF8Encoding]::new($false))
+          $package = Join-Path $PWD "Tools\Deployment\Packages\PowerStig-Windows-Offline-$version.ps1"
+          if (-not (Test-Path -LiteralPath $package -PathType Leaf)) {
+              throw "Offline package was not created: $package"
+          }
+
+          $extractRoot = Join-Path $env:RUNNER_TEMP 'PowerStigOfflineSmokeTest'
+          & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
+              -NoProfile -ExecutionPolicy Bypass -File $package `
+              -Mode ExtractOnly -ExtractRoot $extractRoot -ForceExtract
+          if ($LASTEXITCODE -ne 0) {
+              throw "Offline package extraction smoke test failed with exit code $LASTEXITCODE."
+          }
+
+          $metadata = Get-Content (Join-Path $extractRoot 'PackageMetadata.json') -Raw | ConvertFrom-Json
+          if (-not $metadata.Modules -or -not (Test-Path (Join-Path $extractRoot 'Scripts\Deploy-PowerStigWindows.ps1'))) {
+              throw 'The extracted package is missing required module metadata or deployment entry point.'
+          }
+
+            $artifactDirectory = Join-Path $env:RUNNER_TEMP 'PowerStigOfflineArtifact'
+            New-Item -Path $artifactDirectory -ItemType Directory -Force | Out-Null
+            Copy-Item -LiteralPath $package -Destination $artifactDirectory -Force
+            $guide = Join-Path $PWD 'Tools\Deployment\PowerStig-Windows-使用者运行指南.zh-CN.md'
+            if (-not (Test-Path -LiteralPath $guide -PathType Leaf)) {
+              throw "Deployment guide was not found: $guide"
+            }
+            Copy-Item -LiteralPath $guide -Destination (Join-Path $artifactDirectory 'PowerStig-Windows-Deployment-Guide.zh-CN.md') -Force
+
+      - name: Test deployment compilation without applying settings
+        shell: powershell
+        run: |
+          $version = (Import-PowerShellDataFile .\source\PowerStig.psd1).ModuleVersion
+          $package = Join-Path $PWD "Tools\Deployment\Packages\PowerStig-Windows-Offline-$version.ps1"
+          $extractRoot = Join-Path $env:RUNNER_TEMP 'PowerStigOfflineSmokeTest'
+          & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
+              -NoProfile -ExecutionPolicy Bypass -File $package `
+              -Mode Deploy -WhatIf -ExtractRoot $extractRoot
+          if ($LASTEXITCODE -ne 0) {
+              throw "Deploy -WhatIf failed with exit code $LASTEXITCODE."
+          }
+
+      - name: Run read-only compliance check
+        shell: powershell
+        run: |
+          $version = (Import-PowerShellDataFile .\source\PowerStig.psd1).ModuleVersion
+          $package = Join-Path $PWD "Tools\Deployment\Packages\PowerStig-Windows-Offline-$version.ps1"
+          $extractRoot = Join-Path $env:RUNNER_TEMP 'PowerStigOfflineSmokeTest'
+          & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
+              -NoProfile -ExecutionPolicy Bypass -File $package `
+              -Mode Check -ExtractRoot $extractRoot
+          $checkExitCode = $LASTEXITCODE
+
+          $summary = Get-ChildItem (Join-Path $extractRoot 'Scripts\Logs') -Filter 'Test-PowerStig-*.summary.json' -File |
+              Sort-Object LastWriteTime -Descending |
+              Select-Object -First 1
+          if (-not $summary) {
+              throw "Compliance check did not produce a summary (process exit code $checkExitCode)."
+          }
+
+          $result = Get-Content $summary.FullName -Raw | ConvertFrom-Json
+          if (-not $result.Succeeded) {
+              throw "Compliance check execution failed: $($result.Error)"
+          }
+          Write-Host "Compliance check executed successfully. InDesiredState=$($result.InDesiredState); exit code=$checkExitCode."
+
+      - name: Upload offline package
+        uses: actions/upload-artifact@v4
+        with:
+          name: PowerStig-Windows-Offline-${{ steps.package.outputs.version }}
+          path: ${{ runner.temp }}/PowerStigOfflineArtifact/
+          if-no-files-found: error
+          retention-days: 30

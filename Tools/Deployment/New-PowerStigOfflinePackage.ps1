@@ -48,10 +48,9 @@ $ErrorActionPreference = 'Stop'
 $commonModulePath = Join-Path -Path $PSScriptRoot -ChildPath 'PowerStig.Windows.Common.psm1'
 $deployScriptPath = Join-Path -Path $PSScriptRoot -ChildPath 'Deploy-PowerStigWindows.ps1'
 $checkScriptPath = Join-Path -Path $PSScriptRoot -ChildPath 'Test-PowerStigWindowsCompliance.ps1'
-$guidePath = Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.zh-CN.md' -File |
-    Select-Object -First 1 -ExpandProperty FullName
+$guidePath = Join-Path -Path $PSScriptRoot -ChildPath 'PowerStig-Windows-使用者运行指南.zh-CN.md'
 
-foreach ($requiredFile in @($commonModulePath, $deployScriptPath, $checkScriptPath))
+foreach ($requiredFile in @($commonModulePath, $deployScriptPath, $checkScriptPath, $guidePath))
 {
     if (-not (Test-Path -LiteralPath $requiredFile -PathType Leaf))
     {
