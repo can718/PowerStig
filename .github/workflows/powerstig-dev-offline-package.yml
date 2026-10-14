@@ -90,7 +90,7 @@ jobs:
             $artifactDirectory = Join-Path $env:RUNNER_TEMP 'PowerStigOfflineArtifact'
             New-Item -Path $artifactDirectory -ItemType Directory -Force | Out-Null
             Copy-Item -LiteralPath $package -Destination $artifactDirectory -Force
-            $guide = Join-Path $PWD 'Tools\Deployment\PowerStig-Windows-使用者运行指南.zh-CN.md'
+            $guide = Join-Path $PWD 'Tools\Deployment\PowerStig-Windows-Operator-Guide.zh-CN.md'
             if (-not (Test-Path -LiteralPath $guide -PathType Leaf)) {
               throw "Deployment guide was not found: $guide"
             }
