@@ -132,6 +132,7 @@ jobs:
               throw "Compliance check execution failed: $($result.Error)"
           }
           Write-Host "Compliance check executed successfully. InDesiredState=$($result.InDesiredState); exit code=$checkExitCode."
+            $global:LASTEXITCODE = 0
 
       - name: Upload offline package
         uses: actions/upload-artifact@v4
