@@ -1,5 +1,6 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
+# Last modified: 2026-10-13
 
 <#
     This is used to centralize the regEx patterns, note that the backslashes are
@@ -18,7 +19,7 @@ data regularExpression
         nxFileLineFilePathBannerUbuntu    = Ubuntu.*#\\sgrep\\s-i\\sbanner\\s(?<bannerPathUbuntu>\\/[\\w.\\/-]*\\/[\\w.\\/-]*)
         nxFileLineFilePathTftp            = #\\s+grep.*(?<tftpPath>\\/etc\\/xinetd\\.d\\/tftp).*
         nxFileLineFilePathRescue          = #\\s+grep.*(?<rescuePath>\\/usr\\/lib\\/systemd\\/system\\/rescue\\.service).*
-        nxFileLineFilePath                = (?:#|\\$\\s+sudo|#\\s+sudo)\\s+(?:egrep|grep|cat|more).*\\s+(?<filePath>(?!\\/etc\\/redhat-release)\\/[\\w.\\/-]*\\/[\\w.\\/-]*)
+        nxFileLineFilePath                = (?:#|\\$\\s+sudo|#\\s+sudo)\\s+(?:egrep|grep|cat|more)[^\\r\\n]*?\\s+(?<filePath>(?!\\/etc\\/redhat-release)\\/[\\w.*?\\/-]*[\\w.*?-])
         nxFileLineFooterDetection         = ^If\\s+.*$
 '@
 }

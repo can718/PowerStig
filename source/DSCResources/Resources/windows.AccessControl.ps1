@@ -60,6 +60,12 @@ foreach ($rule in $rules)
         }
         'NTFSAccessEntry'
         {
+            if ([System.Management.Automation.WildcardPattern]::ContainsWildcardCharacters([string] $rule.Path))
+            {
+                Write-Warning "Skipping NTFS permission rule $($rule.id): AccessControlDSC does not support wildcard path '$($rule.Path)'. Review this rule manually."
+                break
+            }
+
             $ruleForce = $null
             [void][bool]::TryParse($rule.Force, [ref]$ruleForce)
             NTFSAccessEntry (Get-ResourceTitle -Rule $rule)

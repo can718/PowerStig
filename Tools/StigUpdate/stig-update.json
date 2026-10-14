@@ -1,0 +1,16 @@
+{
+  "profiles": [
+    {
+      "name": "WindowsClient",
+      "filePattern": "^U_MS_Windows_(?<version>10|11)_STIG_.*-xccdf\\.xml$",
+      "archiveDirectory": "Windows.Client",
+      "splitServerRoles": false
+    },
+    {
+      "name": "WindowsServer",
+      "filePattern": "^U_MS_Windows_Server_(?<version>\\d{4})_STIG_.*-xccdf\\.xml$",
+      "archiveDirectory": "Windows.Server.{version}",
+      "splitServerRoles": true
+    }
+  ]
+}

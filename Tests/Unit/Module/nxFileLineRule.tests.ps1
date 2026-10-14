@@ -1,4 +1,5 @@
 #region Header
+# Last modified: 2026-10-13
 . $PSScriptRoot\.tests.header.ps1
 #endregion
 
@@ -75,6 +76,15 @@ try
         foreach ($testRule in $testRuleList)
         {
             . $PSScriptRoot\Convert.CommonTests.ps1
+        }
+
+        Describe 'Get-nxFileLineFilePath' {
+            It 'Selects the first file when grep includes a file and a glob path' {
+                $checkContent = '$ sudo grep ocredit /etc/security/pwquality.conf /etc/security/pwquality.conf.d/*.conf'
+
+                Get-nxFileLineFilePath -CheckContent $checkContent |
+                    Should -Be '/etc/security/pwquality.conf'
+            }
         }
 
         Describe 'MultipleRules' {

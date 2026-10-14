@@ -240,7 +240,7 @@ try
                 Run `"icacls /help`" to view definitions of other permission codes."
             },
             @{
-                Path = '%windir%\NTDS\*.*'
+                Path = $null
                 AccessControlEntry = @(
                     [pscustomobject]@{
                         Rights         = 'FullControl'
@@ -250,6 +250,7 @@ try
                     }
                 )
                 Force = $true
+                ConversionStatus = 'fail'
                 OrganizationValueRequired = $false
                 CheckContent = 'Verify the permissions on the content of the NTDS directory.
                 Open the registry editor (regedit).

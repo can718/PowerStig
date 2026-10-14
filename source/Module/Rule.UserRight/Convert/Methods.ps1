@@ -1,5 +1,6 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
+# Last modified: 2026-10-13
 #region Method Functions
 <#
     .SYNOPSIS
@@ -155,7 +156,7 @@ function Get-UserRightIdentity
         [void] $return.Add("NULL")
     }
 
-    $return
+    $return | ForEach-Object { $PSItem.Trim().TrimEnd('.') }
 }
 
 <#

@@ -64,6 +64,12 @@ class PermissionRuleConvert : PermissionRule
     {
         $thisPath = Get-PermissionTargetPath -StigString $this.SplitCheckContent
 
+        if ([System.Management.Automation.WildcardPattern]::ContainsWildcardCharacters([string] $thisPath))
+        {
+            $this.ConversionStatus = 'fail'
+            return
+        }
+
         if (-not $this.SetStatus($thisPath))
         {
             $this.set_Path($thisPath)

@@ -1,4 +1,5 @@
 #region Header
+# Last modified: 2026-10-13
 . $PSScriptRoot\.tests.header.ps1
 #endregion
 
@@ -231,6 +232,20 @@ try
         }
 
         #region Add Custom Tests Here
+        Describe 'Get-UserRightIdentity' {
+            It 'Removes sentence-ending periods from Windows Server 2025 identities' {
+                $checkContent = @(
+                    'If any accounts or groups other than the following are granted the "Debug programs" user right, this is a finding:'
+                    'Administrators.'
+                    'Local Service.'
+                    'Network Service.'
+                )
+
+                Get-UserRightIdentity -CheckContent $checkContent |
+                    Should -Be @('Administrators', 'Local Service', 'Network Service')
+            }
+        }
+
         Describe 'MultipleRules' {
             # TODO move this to the CommonTests
             $testRuleList = @(
