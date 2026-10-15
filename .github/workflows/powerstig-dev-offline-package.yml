@@ -96,6 +96,12 @@ jobs:
               throw 'The extracted package is missing required module metadata or deployment entry point.'
           }
 
+          $deploymentScript = Get-Content (Join-Path $extractRoot 'Scripts\Deploy-PowerStigWindows.ps1') -Raw
+          $rebootGuard = '$null -ne $PSItem.PSObject.Properties[''RebootRequested'']'
+          if (-not $deploymentScript.Contains($rebootGuard)) {
+              throw 'The offline package does not contain null-safe DSC reboot-result handling.'
+          }
+
             $artifactDirectory = Join-Path $env:RUNNER_TEMP 'PowerStigOfflineArtifact'
             New-Item -Path $artifactDirectory -ItemType Directory -Force | Out-Null
             Copy-Item -LiteralPath $package -Destination $artifactDirectory -Force

@@ -226,7 +226,14 @@ try
         if ($testResult -isnot [bool])
         {
             $testedResources = @($testResult.ResourcesInDesiredState) + @($testResult.ResourcesNotInDesiredState)
-            $summary.RebootRequested = $null -ne ($testedResources | Where-Object RebootRequested | Select-Object -First 1)
+            $rebootResources = @(
+                $testedResources | Where-Object {
+                    $null -ne $PSItem -and
+                    $null -ne $PSItem.PSObject.Properties['RebootRequested'] -and
+                    [bool] $PSItem.RebootRequested
+                }
+            )
+            $summary.RebootRequested = $rebootResources.Count -gt 0
         }
         if (-not $summary.InDesiredState)
         {
