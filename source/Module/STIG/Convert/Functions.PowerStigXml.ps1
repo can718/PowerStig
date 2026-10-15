@@ -885,7 +885,7 @@ function Get-RuleChangeLog
 
     # regex matches is used to capture the log content directly to the changes variable
     $changeList = [regex]::Matches(
-        $updateLog, '(?<id>V-\d+)(?:::)(?<oldText>.+)(?:::)(?<newText>.+)'
+        $updateLog, '(?<id>V-\d+(?:\.[a-z])?)(?:::)(?<oldText>.+)(?:::)(?<newText>.+)'
     )
 
     # The function returns a hastable

@@ -41,6 +41,15 @@ jobs:
               $failedItems | Format-Table Archive, Status, Error | Out-String | Write-Error
           }
 
+          $dcPath = '.\source\StigData\Processed\WindowsServer-2025-DC-1.4.xml'
+          [xml] $dcStig = Get-Content -LiteralPath $dcPath -Raw
+          $conditionalRegistryRule = $dcStig.SelectSingleNode("//DocumentRule/Rule[@id='V-278001.c']")
+          $sysvolRule = $dcStig.SelectSingleNode("//Rule[@id='V-278139']")
+          $telemetryRule = $dcStig.SelectSingleNode("//Rule[@id='V-278103']")
+          if ($null -eq $conditionalRegistryRule -or $sysvolRule.dscresource -ne 'NTFSAccessEntry' -or $sysvolRule.Force -ne 'True' -or @($sysvolRule.AccessControlEntry.Entry).Count -ne 5 -or $telemetryRule.ValueData -ne '0') {
+              throw 'Windows Server 2025 DC STIG rule processing did not produce the expected ACL and telemetry data.'
+          }
+
       - name: Export module and restore exact runtime dependencies
         shell: powershell
         run: |
@@ -104,9 +113,26 @@ jobs:
           $extractRoot = Join-Path $env:RUNNER_TEMP 'PowerStigOfflineSmokeTest'
           & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
               -NoProfile -ExecutionPolicy Bypass -File $package `
-              -Mode Deploy -WhatIf -ExtractRoot $extractRoot
+              -Mode Deploy -WhatIf -Target WindowsServer2025 -ServerRole DC -ExtractRoot $extractRoot
           if ($LASTEXITCODE -ne 0) {
               throw "Deploy -WhatIf failed with exit code $LASTEXITCODE."
+          }
+
+          $deploymentSummary = Get-ChildItem (Join-Path $extractRoot 'Scripts\Logs') -Filter 'Deploy-PowerStig-*.summary.json' -File |
+              Sort-Object LastWriteTime -Descending |
+              Select-Object -First 1
+          if (-not $deploymentSummary) {
+              throw 'The Windows Server 2025 DC WhatIf compile did not produce a deployment summary.'
+          }
+
+          $deployment = Get-Content $deploymentSummary.FullName -Raw | ConvertFrom-Json
+          if (-not $deployment.Succeeded -or $deployment.Applied -or -not $deployment.WhatIf -or $deployment.Target.ServerRole -ne 'DC') {
+              throw 'The offline package did not successfully compile the Windows Server 2025 DC profile in WhatIf mode.'
+          }
+
+          $mofContent = Get-Content -LiteralPath $deployment.MofPath -Raw
+          if ($mofContent -notmatch '\[NTFSAccessEntry\]\[V-278139\]' -or $mofContent -notmatch '\[RegistryPolicyFile\]\[V-278103\]' -or $mofContent -match 'V-278001\.c') {
+              throw 'The generated DC MOF does not contain the expected automated resources and manual exception.'
           }
 
       - name: Run read-only compliance check

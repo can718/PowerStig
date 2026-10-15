@@ -119,16 +119,31 @@ function ConvertTo-DscResourceRecord
 {
     param([object] $Resource, [bool] $Desired)
 
+    $resourcePropertyNames = @(Get-Member -InputObject $Resource -MemberType Properties -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name)
+    $resourceIdName = $resourcePropertyNames | Where-Object { $PSItem -in 'ResourceId', 'ResourceName' } | Select-Object -First 1
+    if (-not $resourceIdName)
+    {
+        return
+    }
+
+    $moduleName = $resourcePropertyNames | Where-Object { $PSItem -eq 'ModuleName' } | Select-Object -First 1
+    $moduleVersion = $resourcePropertyNames | Where-Object { $PSItem -eq 'ModuleVersion' } | Select-Object -First 1
+    $duration = $resourcePropertyNames | Where-Object { $PSItem -eq 'DurationInSeconds' } | Select-Object -First 1
+    $startDate = $resourcePropertyNames | Where-Object { $PSItem -eq 'StartDate' } | Select-Object -First 1
+    $rebootRequested = $resourcePropertyNames | Where-Object { $PSItem -eq 'RebootRequested' } | Select-Object -First 1
+    $sourceInfo = $resourcePropertyNames | Where-Object { $PSItem -eq 'SourceInfo' } | Select-Object -First 1
+    $resourceError = $resourcePropertyNames | Where-Object { $PSItem -eq 'Error' } | Select-Object -First 1
+
     [pscustomobject]@{
         InDesiredState = $Desired
-        ResourceId = [string] $Resource.ResourceId
-        ModuleName = [string] $Resource.ModuleName
-        ModuleVersion = [string] $Resource.ModuleVersion
-        DurationInSeconds = $Resource.DurationInSeconds
-        StartDate = $Resource.StartDate
-        RebootRequested = $Resource.RebootRequested
-        SourceInfo = [string] $Resource.SourceInfo
-        Error = if ($Resource.Error) { [string] ($Resource.Error | Out-String) } else { $null }
+        ResourceId = if ($resourceIdName) { [string] $Resource.$resourceIdName } else { $null }
+        ModuleName = if ($moduleName) { [string] $Resource.$moduleName } else { $null }
+        ModuleVersion = if ($moduleVersion) { [string] $Resource.$moduleVersion } else { $null }
+        DurationInSeconds = if ($duration) { $Resource.$duration } else { $null }
+        StartDate = if ($startDate) { $Resource.$startDate } else { $null }
+        RebootRequested = if ($rebootRequested) { $Resource.$rebootRequested } else { $null }
+        SourceInfo = if ($sourceInfo) { [string] $Resource.$sourceInfo } else { $null }
+        Error = if ($resourceError -and $Resource.$resourceError) { [string] ($Resource.$resourceError | Out-String) } else { $null }
     }
 }
 
@@ -246,23 +261,7 @@ try
     $detailedResult = if ($null -ne $referenceResult.PSObject.Properties['ResourcesInDesiredState']) { $referenceResult } else { $null }
     if (-not $detailedResult)
     {
-        try
-        {
-            Write-ComplianceLog -Level INFO -Message 'Reference-mode resource details are unavailable; reading the current LCM configuration.'
-            $currentStage = 'DetailedComplianceTest'
-            $detailedOutput = @(Test-DscConfiguration -Detailed -Verbose -ErrorAction Stop *>&1)
-            foreach ($outputItem in $detailedOutput)
-            {
-                Write-ComplianceLog -Level INFO -Message ([string] $outputItem)
-            }
-            $detailedResult = $detailedOutput |
-                Where-Object { $null -ne $PSItem.PSObject.Properties['InDesiredState'] } |
-                Select-Object -Last 1
-        }
-        catch
-        {
-            Write-ComplianceLog -Level WARN -Message "Current LCM detailed results are unavailable: $($PSItem.Exception.Message)"
-        }
+        Write-ComplianceLog -Level WARN -Message 'Reference-mode DSC returned only an overall compliance result; per-resource detail is unavailable for this PowerShell version.'
     }
 
     $currentStage = 'ResultConversion'
@@ -271,8 +270,8 @@ try
     if ($detailedResult)
     {
         $summary.DetailedResultAvailable = $true
-        $desiredResources = @($detailedResult.ResourcesInDesiredState | ForEach-Object { ConvertTo-DscResourceRecord -Resource $PSItem -Desired $true })
-        $noncompliantResources = @($detailedResult.ResourcesNotInDesiredState | ForEach-Object { ConvertTo-DscResourceRecord -Resource $PSItem -Desired $false })
+        $desiredResources = @($detailedResult.ResourcesInDesiredState | ForEach-Object { ConvertTo-DscResourceRecord -Resource $PSItem -Desired $true } | Where-Object { $null -ne $PSItem })
+        $noncompliantResources = @($detailedResult.ResourcesNotInDesiredState | ForEach-Object { ConvertTo-DscResourceRecord -Resource $PSItem -Desired $false } | Where-Object { $null -ne $PSItem })
     }
     $allResources = @($desiredResources + $noncompliantResources)
     $summary.Succeeded = $true

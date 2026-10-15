@@ -220,6 +220,31 @@ function Get-StigRuleList
 
                 foreach ($rule in $rules)
                 {
+                    $splitRuleCorrections = @(
+                        $StigGroupListChangeLog[$rule.Id] |
+                            Where-Object { $PSItem.NewText -match '^HardCodedRule\(' }
+                    )
+                    if ($splitRuleCorrections.Count -gt 1)
+                    {
+                        throw "Multiple hard-coded corrections found for split rule '$($rule.Id)'."
+                    }
+                    if ($splitRuleCorrections.Count -eq 1)
+                    {
+                        $originalRuleId = $rule.Id
+                        $originalRawString = $rule.RawString
+                        $correctedXccdfRule = $stigRule.CloneNode($true)
+                        $correctedXccdfRule.Rule.Check.'check-content' = $splitRuleCorrections[0].NewText
+                        $correctedRules = [ConvertFactory]::Rule($correctedXccdfRule)
+                        if ($correctedRules.Count -ne 1)
+                        {
+                            throw "Split-rule correction for '$originalRuleId' must produce exactly one rule."
+                        }
+
+                        $rule = $correctedRules[0]
+                        $rule.Id = $originalRuleId
+                        $rule.RawString = $originalRawString
+                    }
+
                     <#
                         At this point the original rule could be split into multiple
                         rules and we would not be sure what original text went where.

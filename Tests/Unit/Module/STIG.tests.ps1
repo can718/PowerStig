@@ -259,6 +259,44 @@ try
         }
     }
 
+    Describe 'Windows Server 2025 telemetry configuration' {
+        It 'Should emit the selected STIG-approved AllowTelemetry value for both roles' {
+            foreach ($role in @('DC', 'MS'))
+            {
+                $processedPath = Join-Path -Path $script:projectRoot -ChildPath "source\StigData\Processed\WindowsServer-2025-$role-1.4.xml"
+                [xml] $processedStig = Get-Content -Path $processedPath -Raw
+                $rule = $processedStig.SelectSingleNode("//Rule[@id='V-278103']")
+
+                $rule.ValueData | Should Be '0'
+            }
+        }
+    }
+
+    Describe 'Windows Server 2025 DC ACL handling' {
+        BeforeAll {
+            $processedPath = Join-Path -Path $script:projectRoot -ChildPath 'source\StigData\Processed\WindowsServer-2025-DC-1.4.xml'
+            [xml] $processedStig = Get-Content -Path $processedPath -Raw
+        }
+
+        It 'keeps the conditional V-278001.c default as a manual review' {
+            $rule = $processedStig.SelectSingleNode("//DocumentRule/Rule[@id='V-278001.c']")
+
+            $rule | Should Not Be $null
+            $rule.RawString | Should Match 'If the defaults have not been changed, this is not a finding'
+        }
+
+        It 'checks the effective SYSVOL default ACL with a forced resource' {
+            $rule = $processedStig.SelectSingleNode("//Rule[@id='V-278139']")
+
+            $rule.dscresource | Should Be 'NTFSAccessEntry'
+            $rule.Force | Should Be 'True'
+            @($rule.AccessControlEntry.Entry).Count | Should Be 5
+            $rule.AccessControlEntry.Entry[0].Inheritance | Should Be 'This folder subfolders and files'
+            $rule.AccessControlEntry.Entry[1].Inheritance | Should Be 'This folder subfolders and files'
+            $rule.AccessControlEntry.Entry[4].Inheritance | Should Be 'Subfolders and files only'
+        }
+    }
+
     Describe 'Stale Log File Entries' {
         It 'Rule IDs that are not present in archived STIG should not exist in associated log file' {
 

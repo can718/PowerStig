@@ -1,6 +1,9 @@
 V-278085::*::.
+V-278001.c::*::HardCodedRule(DocumentRule)@{DscResource = 'None'; Severity = 'medium'; OrganizationValueRequired = $false}
 V-278101::*::.
+V-278103::Value0x00000000 (0), 0x00000001 (1)::Value: 0x00000000 (0)
 V-278133::*::.
+V-278139::*::HardCodedRule(PermissionRule)@{DscResource = 'NTFSAccessEntry'; AccessControlEntry = @(@{Type = $null; Principal = 'NT AUTHORITY\Authenticated Users'; ForcePrincipal = 'False'; Inheritance = 'This folder subfolders and files'; Rights = 'ReadAndExecute'}, @{Type = $null; Principal = 'BUILTIN\Server Operators'; ForcePrincipal = 'False'; Inheritance = 'This folder subfolders and files'; Rights = 'ReadAndExecute'}, @{Type = $null; Principal = 'BUILTIN\Administrators'; ForcePrincipal = 'False'; Inheritance = 'This folder subfolders and files'; Rights = 'FullControl'}, @{Type = $null; Principal = 'NT AUTHORITY\SYSTEM'; ForcePrincipal = 'False'; Inheritance = 'This folder subfolders and files'; Rights = 'FullControl'}, @{Type = $null; Principal = 'CREATOR OWNER'; ForcePrincipal = 'False'; Inheritance = 'Subfolders and files only'; Rights = 'FullControl'}); Force = 'True'; Path = '%windir%\sysvol'}
 V-278212::*::.
 V-285314::*::.
 V-285315::*::.

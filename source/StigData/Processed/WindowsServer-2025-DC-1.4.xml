@@ -1,4 +1,4 @@
-<DISASTIG version="1" classification="UNCLASSIFIED" customname="" stigid="MS_Windows_Server_2025_DC_STIG" description="This Security Technical Implementation Guide is published as a tool to improve the security of Department of War (DoW) information systems. The requirements are derived from the National Institute of Standards and Technology (NIST) 800-53 and related documents. Comments or proposed revisions to this document should be sent via email to the following address: disa.stig_spt@mail.mil." filename="U_MS_Windows_Server_2025_DC_STIG_V1R4_Manual-xccdf.xml" releaseinfo="Release: 4 Benchmark Date: 30 Sep 2026 3.5.2 1.10.0" title="Microsoft Windows Server 2025 Security Technical Implementation Guide" notice="terms-of-use" source="STIG.DOD.MIL" fullversion="1.4" created="10/14/2026">
+<DISASTIG version="1" classification="UNCLASSIFIED" customname="" stigid="MS_Windows_Server_2025_DC_STIG" description="This Security Technical Implementation Guide is published as a tool to improve the security of Department of War (DoW) information systems. The requirements are derived from the National Institute of Standards and Technology (NIST) 800-53 and related documents. Comments or proposed revisions to this document should be sent via email to the following address: disa.stig_spt@mail.mil." filename="U_MS_Windows_Server_2025_DC_STIG_V1R4_Manual-xccdf.xml" releaseinfo="Release: 4 Benchmark Date: 30 Sep 2026 3.5.2 1.10.0" title="Microsoft Windows Server 2025 Security Technical Implementation Guide" notice="terms-of-use" source="STIG.DOD.MIL" fullversion="1.4" created="10/15/2026">
   <AccountPolicyRule dscresourcemodule="SecurityPolicyDsc">
     <Rule id="V-278134" severity="medium" conversionstatus="pass" title="SRG-OS-000112-GPOS-00057" dscresource="AccountPolicy">
       <Description>&lt;VulnDiscussion&gt;This setting determines the maximum amount of time (in minutes) that a granted session ticket can be used to access a particular service. Session tickets are used only to authenticate new connections with servers. Ongoing operations are not interrupted if the session ticket used to authenticate the connection expires during the connection.
@@ -1514,6 +1514,37 @@ If unapproved shared accounts exist, this is a finding.</RawString>
 This requirement is not applicable on a system that has the role as the IDPS. However, this exception must be documented with the information system security officer (ISSO).
 
 If a host-based IDPS is not installed on the system, this is a finding.</RawString>
+    </Rule>
+    <Rule id="V-278001.c" severity="medium" conversionstatus="pass" title="SRG-OS-000324-GPOS-00125" dscresource="None">
+      <Description>&lt;VulnDiscussion&gt;The registry is integral to the function, security, and stability of the Windows system. Changing the system's registry permissions allows the possibility of unauthorized and anonymous modification to the operating system.&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;&lt;FalseNegatives&gt;&lt;/FalseNegatives&gt;&lt;Documentable&gt;false&lt;/Documentable&gt;&lt;Mitigations&gt;&lt;/Mitigations&gt;&lt;SeverityOverrideGuidance&gt;&lt;/SeverityOverrideGuidance&gt;&lt;PotentialImpacts&gt;&lt;/PotentialImpacts&gt;&lt;ThirdPartyTools&gt;&lt;/ThirdPartyTools&gt;&lt;MitigationControl&gt;&lt;/MitigationControl&gt;&lt;Responsibility&gt;&lt;/Responsibility&gt;&lt;IAControls&gt;&lt;/IAControls&gt;</Description>
+      <DuplicateOf />
+      <IsNullOrEmpty>False</IsNullOrEmpty>
+      <LegacyId>
+      </LegacyId>
+      <OrganizationValueRequired>False</OrganizationValueRequired>
+      <OrganizationValueTestString />
+      <RawString>Review the registry permissions for the keys of the HKEY_LOCAL_MACHINE hive noted below.
+If any nonprivileged groups such as Everyone, Users, or Authenticated Users have greater than Read permission, this is a finding.
+If permissions are not as restrictive as the default permissions listed below, this is a finding.
+Note: “Authenticated Users” is default on Domain Controllers, and “Users” is default on member servers and stand-alone servers. Revise expected response based on system context.
+Run "Regedit".
+Right-click on the registry areas noted below.
+Select "Permissions" and then click "Advanced".
+HKEY_LOCAL_MACHINE\SYSTEM
+Type - "Allow" for all
+Inherited from - "None" for all
+Principal - Access - Applies to
+Authenticated Users - Read - This key and subkeys
+Administrators - Full Control - This key and subkeys
+SYSTEM - Full Control - This key and subkeys
+CREATOR OWNER - Full Control - This key and Subkeys
+ALL APPLICATION PACKAGES - Read - This key and subkeys
+Server Operators - Read - This Key and subkeys (Domain controllers only)
+Other examples under the noted keys may also be sampled. In some instances, nonprivileged groups have greater than Read permission.
+Microsoft has given Read permission to the SOFTWARE and SYSTEM registry keys in Windows Server 2025 to the following SID. This is not a finding.
+S-1-15-3-1024-1065365936-1281604716-3511738428-1654721687-432734479-3232135806-4053264122-3456934681
+If the defaults have not been changed, this is not a finding.
+</RawString>
     </Rule>
     <Rule id="V-278003" severity="medium" conversionstatus="pass" title="SRG-OS-000118-GPOS-00060" dscresource="None">
       <Description>&lt;VulnDiscussion&gt;Outdated or unused accounts provide penetration points that may go undetected. Inactive accounts must be deleted if no longer necessary or, if still required, disabled until needed.
@@ -4315,98 +4346,6 @@ S-1-15-3-1024-1065365936-1281604716-3511738428-1654721687-432734479-3232135806-4
 If the defaults have not been changed, this is not a finding.
 </RawString>
     </Rule>
-    <Rule id="V-278001.c" severity="medium" conversionstatus="pass" title="SRG-OS-000324-GPOS-00125" dscresource="RegistryAccessEntry">
-      <AccessControlEntry>
-        <Entry>
-          <Type>
-          </Type>
-          <Principal>Authenticated Users</Principal>
-          <ForcePrincipal>False</ForcePrincipal>
-          <Inheritance>This Key and Subkeys</Inheritance>
-          <Rights>ReadKey</Rights>
-        </Entry>
-        <Entry>
-          <Type>
-          </Type>
-          <Principal>Administrators</Principal>
-          <ForcePrincipal>False</ForcePrincipal>
-          <Inheritance>This Key and Subkeys</Inheritance>
-          <Rights>FullControl</Rights>
-        </Entry>
-        <Entry>
-          <Type>
-          </Type>
-          <Principal>SYSTEM</Principal>
-          <ForcePrincipal>False</ForcePrincipal>
-          <Inheritance>This Key and Subkeys</Inheritance>
-          <Rights>FullControl</Rights>
-        </Entry>
-        <Entry>
-          <Type>
-          </Type>
-          <Principal>CREATOR OWNER</Principal>
-          <ForcePrincipal>False</ForcePrincipal>
-          <Inheritance>This Key and Subkeys</Inheritance>
-          <Rights>FullControl</Rights>
-        </Entry>
-        <Entry>
-          <Type>
-          </Type>
-          <Principal>ALL APPLICATION PACKAGES</Principal>
-          <ForcePrincipal>False</ForcePrincipal>
-          <Inheritance>This Key and Subkeys</Inheritance>
-          <Rights>ReadKey</Rights>
-        </Entry>
-        <Entry>
-          <Type>
-          </Type>
-          <Principal>Server Operators</Principal>
-          <ForcePrincipal>False</ForcePrincipal>
-          <Inheritance>
-          </Inheritance>
-          <Rights>ReadKey</Rights>
-        </Entry>
-        <Entry>
-          <Type>
-          </Type>
-          <Principal>S-1-15-3-1024-1065365936-1281604716-3511738428-1654721687-432734479-3232135806-4053264122-3456934681</Principal>
-          <ForcePrincipal>False</ForcePrincipal>
-          <Inheritance>This Key and Subkeys</Inheritance>
-          <Rights>ReadKey</Rights>
-        </Entry>
-      </AccessControlEntry>
-      <Description>&lt;VulnDiscussion&gt;The registry is integral to the function, security, and stability of the Windows system. Changing the system's registry permissions allows the possibility of unauthorized and anonymous modification to the operating system.&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;&lt;FalseNegatives&gt;&lt;/FalseNegatives&gt;&lt;Documentable&gt;false&lt;/Documentable&gt;&lt;Mitigations&gt;&lt;/Mitigations&gt;&lt;SeverityOverrideGuidance&gt;&lt;/SeverityOverrideGuidance&gt;&lt;PotentialImpacts&gt;&lt;/PotentialImpacts&gt;&lt;ThirdPartyTools&gt;&lt;/ThirdPartyTools&gt;&lt;MitigationControl&gt;&lt;/MitigationControl&gt;&lt;Responsibility&gt;&lt;/Responsibility&gt;&lt;IAControls&gt;&lt;/IAControls&gt;</Description>
-      <DuplicateOf />
-      <Force>True</Force>
-      <IsNullOrEmpty>False</IsNullOrEmpty>
-      <LegacyId>
-      </LegacyId>
-      <OrganizationValueRequired>False</OrganizationValueRequired>
-      <OrganizationValueTestString />
-      <Path>HKLM:\SYSTEM</Path>
-      <RawString>Review the registry permissions for the keys of the HKEY_LOCAL_MACHINE hive noted below.
-If any nonprivileged groups such as Everyone, Users, or Authenticated Users have greater than Read permission, this is a finding.
-If permissions are not as restrictive as the default permissions listed below, this is a finding.
-Note: “Authenticated Users” is default on Domain Controllers, and “Users” is default on member servers and stand-alone servers. Revise expected response based on system context.
-Run "Regedit".
-Right-click on the registry areas noted below.
-Select "Permissions" and then click "Advanced".
-HKEY_LOCAL_MACHINE\SYSTEM
-Type - "Allow" for all
-Inherited from - "None" for all
-Principal - Access - Applies to
-Authenticated Users - Read - This key and subkeys
-Administrators - Full Control - This key and subkeys
-SYSTEM - Full Control - This key and subkeys
-CREATOR OWNER - Full Control - This key and Subkeys
-ALL APPLICATION PACKAGES - Read - This key and subkeys
-Server Operators - Read - This Key and subkeys (Domain controllers only)
-Other examples under the noted keys may also be sampled. In some instances, nonprivileged groups have greater than Read permission.
-Microsoft has given Read permission to the SOFTWARE and SYSTEM registry keys in Windows Server 2025 to the following SID. This is not a finding.
-S-1-15-3-1024-1065365936-1281604716-3511738428-1654721687-432734479-3232135806-4053264122-3456934681
-If the defaults have not been changed, this is not a finding.
-</RawString>
-    </Rule>
     <Rule id="V-278043" severity="medium" conversionstatus="pass" title="SRG-OS-000057-GPOS-00027" dscresource="NTFSAccessEntry">
       <AccessControlEntry>
         <Entry>
@@ -4705,63 +4644,40 @@ BUILTIN\Administrators:(I)(F)
     <Rule id="V-278139" severity="high" conversionstatus="pass" title="SRG-OS-000324-GPOS-00125" dscresource="NTFSAccessEntry">
       <AccessControlEntry>
         <Entry>
-          <Type>Allow</Type>
+          <Type>
+          </Type>
           <Principal>NT AUTHORITY\Authenticated Users</Principal>
           <ForcePrincipal>False</ForcePrincipal>
-          <Inheritance>This folder only</Inheritance>
+          <Inheritance>This folder subfolders and files</Inheritance>
           <Rights>ReadAndExecute</Rights>
         </Entry>
         <Entry>
-          <Type>Allow</Type>
-          <Principal>NT AUTHORITY\Authenticated Users</Principal>
-          <ForcePrincipal>False</ForcePrincipal>
-          <Inheritance>Subfolders and files only</Inheritance>
-          <Rights>ReadAndExecute</Rights>
-        </Entry>
-        <Entry>
-          <Type>Allow</Type>
+          <Type>
+          </Type>
           <Principal>BUILTIN\Server Operators</Principal>
           <ForcePrincipal>False</ForcePrincipal>
-          <Inheritance>This folder only</Inheritance>
+          <Inheritance>This folder subfolders and files</Inheritance>
           <Rights>ReadAndExecute</Rights>
         </Entry>
         <Entry>
-          <Type>Allow</Type>
-          <Principal>BUILTIN\Server Operators</Principal>
-          <ForcePrincipal>False</ForcePrincipal>
-          <Inheritance>Subfolders and files only</Inheritance>
-          <Rights>ReadAndExecute</Rights>
-        </Entry>
-        <Entry>
-          <Type>Allow</Type>
+          <Type>
+          </Type>
           <Principal>BUILTIN\Administrators</Principal>
           <ForcePrincipal>False</ForcePrincipal>
-          <Inheritance>This folder only</Inheritance>
-          <Rights>AppendData,ChangePermissions,CreateDirectories,CreateFiles,Delete,DeleteSubdirectoriesAndFiles,ExecuteFile,ListDirectory,Modify,Read,ReadAndExecute,ReadAttributes,ReadData,ReadExtendedAttributes,ReadPermissions,Synchronize,TakeOwnership,Traverse,Write,WriteAttributes,WriteData,WriteExtendedAttributes</Rights>
-        </Entry>
-        <Entry>
-          <Type>Allow</Type>
-          <Principal>BUILTIN\Administrators</Principal>
-          <ForcePrincipal>False</ForcePrincipal>
-          <Inheritance>Subfolders and files only</Inheritance>
+          <Inheritance>This folder subfolders and files</Inheritance>
           <Rights>FullControl</Rights>
         </Entry>
         <Entry>
-          <Type>Allow</Type>
+          <Type>
+          </Type>
           <Principal>NT AUTHORITY\SYSTEM</Principal>
           <ForcePrincipal>False</ForcePrincipal>
-          <Inheritance>This folder only</Inheritance>
+          <Inheritance>This folder subfolders and files</Inheritance>
           <Rights>FullControl</Rights>
         </Entry>
         <Entry>
-          <Type>Allow</Type>
-          <Principal>NT AUTHORITY\SYSTEM</Principal>
-          <ForcePrincipal>False</ForcePrincipal>
-          <Inheritance>Subfolders and files only</Inheritance>
-          <Rights>FullControl</Rights>
-        </Entry>
-        <Entry>
-          <Type>Allow</Type>
+          <Type>
+          </Type>
           <Principal>CREATOR OWNER</Principal>
           <ForcePrincipal>False</ForcePrincipal>
           <Inheritance>Subfolders and files only</Inheritance>
@@ -5398,8 +5314,7 @@ Value Name: AllowTelemetry
 
 Type: REG_DWORD
 Value0x00000000 (0), 0x00000001 (1)</RawString>
-      <ValueData>
-      </ValueData>
+      <ValueData>0</ValueData>
       <ValueName>AllowTelemetry</ValueName>
       <ValueType>Dword</ValueType>
     </Rule>
