@@ -455,7 +455,7 @@ try {
                                 $recommendedValue = '900'
                             }
                         }
-                        'V-278207' {
+                        { $PSItem -in @('V-205631', 'V-254457', 'V-278207', 'V-220921', 'V-253445') } {
                             $legalNotice = [string]$currentValue
                             if (-not [string]::IsNullOrWhiteSpace($legalNotice) -and $legalNotice -notmatch '[\x00-\x08\x0B\x0C\x0E-\x1F]') {
                                 $recommendedValue = $legalNotice
@@ -2008,11 +2008,6 @@ function filterStatus(tableId, status, button) {
             row.style.display = 'none';
         }
     });
-                [xml]$settingsXml = Get-Content -LiteralPath $settingsPath -Raw
-                if ($settingsXml.DocumentElement.LocalName -ne 'OrganizationalSettings') {
-                    throw "OrgSettings root element must be OrganizationalSettings: $settingsPath"
-                }
-
 }
 </script>
 </body>
