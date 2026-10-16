@@ -18,8 +18,8 @@
     Usage    : Run as Administrator; compatible with PowerShell 5.1 or 7.x
         Place the GitHub Actions PowerStig offline artifact beside this file or in .\Packages.
         POWERSTIG_OFFLINE_PACKAGE can specify another path. POWERSTIG_ORG_SETTINGS_PATH
-        optionally supplies approved organization values. If omitted, a blank template is
-        created under %ProgramData%\PowerStigOffline\OrgSettings and is never overwritten.
+        optionally supplies approved organization values. If omitted, the package supplies
+        the default login notice and administrator credential prompt without creating XML.
         TerraForge and direct FIPS/TLS/RDP helpers remain external/independent of the artifact.
 #>
 # ==============================================================================
@@ -306,185 +306,6 @@ try {
                 }
 
                 return $packages[0].FullName
-            }
-
-            function Initialize-PowerStigOrgSettings {
-                param(
-                    [Parameter(Mandatory)][string]$OfflinePackagePath,
-                    [Parameter(Mandatory)][string]$PowerShell51,
-                    [Parameter(Mandatory)][string]$OperatingSystem,
-                    [Parameter(Mandatory)][string]$ServerRole,
-                    [string]$OrgSettingsRoot = (Join-Path $env:ProgramData 'PowerStigOffline')
-                )
-
-                if ($env:POWERSTIG_ORG_SETTINGS_PATH) {
-                    if (-not (Test-Path -LiteralPath $env:POWERSTIG_ORG_SETTINGS_PATH -PathType Leaf)) {
-                        throw "POWERSTIG_ORG_SETTINGS_PATH does not point to a file: $env:POWERSTIG_ORG_SETTINGS_PATH"
-                    }
-
-                    $settingsPath = (Resolve-Path -LiteralPath $env:POWERSTIG_ORG_SETTINGS_PATH).Path
-                    [xml]$settingsXml = Get-Content -LiteralPath $settingsPath -Raw
-                    if ($settingsXml.DocumentElement.LocalName -ne 'OrganizationalSettings') {
-                        throw "OrgSettings root element must be OrganizationalSettings: $settingsPath"
-                    }
-                    return $settingsPath
-                }
-
-                $profile = switch ($OperatingSystem) {
-                    'WS2019' { [pscustomobject]@{ Target = 'WindowsServer2019'; Template = "WindowsServer-2019-$ServerRole-3.9.org.default.xml" } }
-                    'WS2022' { [pscustomobject]@{ Target = 'WindowsServer2022'; Template = "WindowsServer-2022-$ServerRole-2.11.org.default.xml" } }
-                    'WS2025' { [pscustomobject]@{ Target = 'WindowsServer2025'; Template = "WindowsServer-2025-$ServerRole-1.4.org.default.xml" } }
-                    'Win10' { [pscustomobject]@{ Target = 'Windows10'; Template = 'WindowsClient-10-3.6.org.default.xml' } }
-                    'Win11' { [pscustomobject]@{ Target = 'Windows11'; Template = 'WindowsClient-11-2.11.org.default.xml' } }
-                    default { throw "No PowerStig organization-settings template is known for '$OperatingSystem'." }
-                }
-
-                $packageVersion = [regex]::Match([IO.Path]::GetFileName($OfflinePackagePath), '\d+\.\d+\.\d+').Value
-                if (-not $packageVersion) {
-                    throw "Could not determine the PowerStig package version from '$OfflinePackagePath'."
-                }
-
-                $packageHash = (Get-FileHash -LiteralPath $OfflinePackagePath -Algorithm SHA256).Hash.Substring(0, 12)
-                $templateRoot = Join-Path $OrgSettingsRoot "OrgTemplates\$packageHash"
-                $templatePath = Join-Path $templateRoot "Modules\PowerStig\$packageVersion\StigData\Processed\$($profile.Template)"
-                if (-not (Test-Path -LiteralPath $templatePath -PathType Leaf)) {
-                    $extractOutput = @(& $PowerShell51 -NoProfile -ExecutionPolicy Bypass -File $OfflinePackagePath -Mode ExtractOnly -ExtractRoot $templateRoot -ForceExtract 2>&1)
-                    $extractExitCode = $LASTEXITCODE
-                    foreach ($outputLine in @($extractOutput | Select-Object -Last 10)) {
-                        Write-TerraForgeLog ([string]$outputLine) -Level 'Info'
-                    }
-                    if ($extractExitCode -ne 0 -or -not (Test-Path -LiteralPath $templatePath -PathType Leaf)) {
-                        throw "Could not extract organization-settings template '$($profile.Template)' from offline package (exit code $extractExitCode)."
-                    }
-                }
-
-                $settingsDirectory = Join-Path $OrgSettingsRoot 'OrgSettings'
-                New-Item -Path $settingsDirectory -ItemType Directory -Force | Out-Null
-                $settingsPath = Join-Path $settingsDirectory "$($profile.Target)-$ServerRole-$packageVersion.org.settings.xml"
-                if (-not (Test-Path -LiteralPath $settingsPath -PathType Leaf)) {
-                    Copy-Item -LiteralPath $templatePath -Destination $settingsPath
-                    Write-Warn "Created an organization-settings template: $settingsPath. Safe defaults/current values will be populated; remaining organization choices stay blank."
-                }
-                else {
-                    Write-OK "Using existing organization-settings file without overwriting it: $settingsPath"
-                }
-
-                [xml]$settingsXml = Get-Content -LiteralPath $settingsPath -Raw
-                if ($settingsXml.DocumentElement.LocalName -ne 'OrganizationalSettings') {
-                    throw "OrgSettings root element must be OrganizationalSettings: $settingsPath"
-                }
-
-                $processedFile = $templatePath -replace '\.org\.default\.xml$', '.xml'
-                if (-not (Test-Path -LiteralPath $processedFile -PathType Leaf)) {
-                    throw "Processed STIG data file was not found beside the OrgSettings template: $processedFile"
-                }
-                [xml]$processedStig = Get-Content -LiteralPath $processedFile -Raw
-                $autoFilledIds = [System.Collections.Generic.List[string]]::new()
-                $doDNoticeText = @'
-You are accessing a U.S. Government (USG) Information System (IS) that is provided for USG-authorized use only. By using this IS (which includes any device attached to this IS), you consent to the following conditions:
--The USG routinely intercepts and monitors communications on this IS for purposes including, but not limited to, penetration testing, COMSEC monitoring, network operations and defense, personnel misconduct (PM), law enforcement (LE), and counterintelligence (CI) investigations.
--At any time, the USG may inspect and seize data stored on this IS.
--Communications using, or data stored on, this IS are not private, are subject to routine monitoring, interception, and search, and may be disclosed or used for any USG-authorized purpose.
--This IS includes security measures (e.g., authentication and access controls) to protect USG interests--not for your personal benefit or privacy.
--Notwithstanding the above, using this IS does not constitute consent to PM, LE or CI investigative searching or monitoring of the content of privileged communications, or work product, related to personal representation or services by attorneys, psychotherapists, or clergy, and their assistants. Such communications and work product are private and confidential. See User Agreement for details.
-'@
-
-                foreach ($setting in $settingsXml.SelectNodes('/OrganizationalSettings/OrganizationalSetting')) {
-                    $id = $setting.GetAttribute('id')
-                    $valueAttribute = @($setting.Attributes | Where-Object Name -ne 'id' | Select-Object -First 1)
-                    $isRequestedLegalNotice = $id -in @('V-205631', 'V-254457', 'V-278207', 'V-220921', 'V-253445')
-                    if (-not $id -or $valueAttribute.Count -eq 0 -or (-not $isRequestedLegalNotice -and -not [string]::IsNullOrWhiteSpace($valueAttribute[0].Value))) {
-                        continue
-                    }
-
-                    $rule = $processedStig.SelectSingleNode("//Rule[@id='$id']")
-                    if ($null -eq $rule) {
-                        continue
-                    }
-
-                    $currentValue = $null
-                    if ($rule.Key -and $rule.ValueName -and $id -ne 'V-278240') {
-                        $registryPath = [string]$rule.Key
-                        $registryPath = $registryPath -replace '^HKEY_LOCAL_MACHINE', 'Registry::HKEY_LOCAL_MACHINE'
-                        $registryPath = $registryPath -replace '^HKEY_CURRENT_USER', 'Registry::HKEY_CURRENT_USER'
-                        $registryItem = Get-ItemProperty -LiteralPath $registryPath -Name $rule.ValueName -ErrorAction SilentlyContinue
-                        if ($registryItem) {
-                            $currentProperty = $registryItem.PSObject.Properties[$rule.ValueName]
-                            if ($currentProperty) {
-                                $currentValue = $currentProperty.Value
-                            }
-                        }
-                    }
-
-                    $recommendedValue = $null
-                    switch ($id) {
-                        'V-278090.b' {
-                            if ([string]$currentValue -in @('1', '3')) {
-                                $recommendedValue = [string]$currentValue
-                            }
-                            elseif ($null -eq $currentValue) {
-                                try {
-                                    if (Confirm-SecureBootUEFI -ErrorAction Stop) {
-                                        $recommendedValue = '1'
-                                    }
-                                }
-                                catch { }
-                            }
-                        }
-                        'V-278091' {
-                            if ($null -eq $currentValue) { $recommendedValue = 'ShouldBeAbsent' }
-                            elseif ([string]$currentValue -in @('1', '3', '8')) { $recommendedValue = [string]$currentValue }
-                            else { $recommendedValue = '3' }
-                        }
-                        { $PSItem -in @('V-278105', 'V-278107') } {
-                            $size = 0
-                            if ([int]::TryParse([string]$currentValue, [ref]$size) -and $size -ge 32768) {
-                                $recommendedValue = [string]$size
-                            }
-                            else {
-                                $recommendedValue = '32768'
-                            }
-                        }
-                        'V-278106' {
-                            $size = 0
-                            if ([int]::TryParse([string]$currentValue, [ref]$size) -and $size -ge 5120000) {
-                                $recommendedValue = [string]$size
-                            }
-                        }
-                        { $PSItem -in @('V-278109', 'V-278110', 'V-278111', 'V-278118', 'V-278122') } {
-                            if ($null -eq $currentValue) { $recommendedValue = 'ShouldBeAbsent' }
-                            else { $recommendedValue = '0' }
-                        }
-                        'V-278206' {
-                            $timeout = 0
-                            if ([int]::TryParse([string]$currentValue, [ref]$timeout) -and $timeout -gt 0 -and $timeout -le 900) {
-                                $recommendedValue = [string]$timeout
-                            }
-                            else {
-                                $recommendedValue = '900'
-                            }
-                        }
-                        { $PSItem -in @('V-205631', 'V-254457', 'V-278207', 'V-220921', 'V-253445') } {
-                            $recommendedValue = $doDNoticeText
-                        }
-                        'V-278209' {
-                            if ([string]$currentValue -in @('1', '2')) { $recommendedValue = [string]$currentValue }
-                            else { $recommendedValue = '1' }
-                        }
-                    }
-
-                    if ($null -ne $recommendedValue) {
-                        $setting.SetAttribute($valueAttribute[0].Name, $recommendedValue)
-                        $autoFilledIds.Add($id)
-                    }
-                }
-
-                if ($autoFilledIds.Count -gt 0) {
-                    $settingsXml.Save($settingsPath)
-                    Write-Warn "Prefilled safe/current OrgSettings values for: $($autoFilledIds -join ', '). Review the generated file; domain policy, log-volume, and user-profile choices remain organization-owned."
-                }
-
-                return $settingsPath
             }
 
             function Get-DscResourceLabel {
@@ -783,19 +604,13 @@ Write-Output 'OK'
                             throw "Windows PowerShell 5.1 was not found: $powershell51"
                         }
 
-                        $orgSettingsWasSupplied = [bool]$env:POWERSTIG_ORG_SETTINGS_PATH
-                        $orgSettingsPath = Initialize-PowerStigOrgSettings `
-                            -OfflinePackagePath $offlinePackagePath `
-                            -PowerShell51 $powershell51 `
-                            -OperatingSystem $script:DetectedOS `
-                            -ServerRole $script:DetectedRole
-
-                        $legalNoticeRegistryPath = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
-                        if (-not (Test-Path -LiteralPath $legalNoticeRegistryPath)) {
-                            New-Item -Path $legalNoticeRegistryPath -Force | Out-Null
+                        $orgSettingsPath = $null
+                        if ($env:POWERSTIG_ORG_SETTINGS_PATH) {
+                            if (-not (Test-Path -LiteralPath $env:POWERSTIG_ORG_SETTINGS_PATH -PathType Leaf)) {
+                                throw "POWERSTIG_ORG_SETTINGS_PATH does not point to a file: $env:POWERSTIG_ORG_SETTINGS_PATH"
+                            }
+                            $orgSettingsPath = (Resolve-Path -LiteralPath $env:POWERSTIG_ORG_SETTINGS_PATH).Path
                         }
-                        Set-ItemProperty -LiteralPath $legalNoticeRegistryPath -Name 'LegalNoticeCaption' -Value 'DoD Notice and Consent Banner' -Type String -Force
-                        Write-OK 'Login legal notice caption set to: DoD Notice and Consent Banner'
 
                         $packageArguments = @(
                             '-NoProfile'
@@ -817,11 +632,11 @@ Write-Output 'OK'
 
                         Write-OK "Applying $($script:STIGExecution.Baseline) STIG from offline artifact: $offlinePackagePath"
                         Add-PolicyEntry -Category 'STIG' -Policy 'PowerStig Offline Artifact' -Description "$($script:STIGExecution.Baseline) baseline from $([IO.Path]::GetFileName($offlinePackagePath))" -Status 'Verified'
-                        if ($orgSettingsWasSupplied) {
+                        if ($orgSettingsPath) {
                             Add-PolicyEntry -Category 'STIG' -Policy 'Organization Settings' -Description "Using supplied settings file: $orgSettingsPath" -Status 'Verified'
                         }
                         else {
-                            Add-PolicyEntry -Category 'STIG' -Policy 'Organization Settings template' -Description "Auto-created/reused template: $orgSettingsPath" -Status 'Skipped' -Reason 'Review and fill organization-approved values; empty fields are not applied'
+                            Add-PolicyEntry -Category 'STIG' -Policy 'Default Login Experience' -Description 'Package defaults: full DoD login notice, caption, and administrator credential prompt; no generated OrgSettings file' -Status 'Verified'
                         }
                         if ($script:DetectedOS -eq 'WS2025' -and $script:DetectedRole -eq 'DC') {
                             Add-PolicyEntry -Category 'STIG' -Policy 'V-278001.c' -Description 'Conditional Server 2025 registry ACL default requires manual review' -Status 'Skipped' -Reason 'The optional Server 2025 SID and unchanged-default ACL condition are not forced by DSC'

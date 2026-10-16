@@ -1,6 +1,6 @@
 # PowerStig Windows 离线包运行指南
 
-最后更新：2026-10-14
+最后更新：2026-10-16
 
 本文说明如何在 Windows 目标机上运行 GitHub Actions artifact 中的离线包，执行合规检查、部署预演、正式部署，以及查看运行结果和日志。
 
@@ -32,6 +32,8 @@ if (-not $package) { throw '未找到 PowerStig 离线包。' }
 ```
 
 以下命令均使用变量 `$package`。如需组织设置，将 `-OrgSettingsPath` 和路径加到对应命令中。
+
+不提供组织设置文件时，包默认配置完整 USG/DoD 登录警告、标题 `DoD Notice and Consent Banner`，并将管理员提权设为安全桌面输入凭据（`ConsentPromptBehaviorAdmin=1`），不创建额外 XML。其他空白组织规则仍跳过；这不是完整人工 STIG 审核。显式提供 XML 时保留其正文及基线 UAC 值，不注入默认正文/UAC；缺少自动标题规则的平台仍使用默认标题。生产使用前应审核声明文本。部署与检查使用相同默认值；登录交互需要重新登录验证，部分设置需要重启。
 
 ## 2. 运行合规检查
 

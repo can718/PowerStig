@@ -183,7 +183,7 @@ try
     }
     else
     {
-        Write-DeploymentLog -Level WARN -Message 'No OrgSettingsPath was supplied. Rules with empty organization defaults will be skipped by PowerStig.'
+        Write-DeploymentLog -Level INFO -Message 'Using built-in login defaults: full DoD notice, caption, and administrator credential prompt. Other empty organization values remain skipped.'
     }
 
     Assert-PowerStigTargetAvailable -Target $targetInfo

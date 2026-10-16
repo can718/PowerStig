@@ -87,7 +87,11 @@ Windows Server 会根据域角色自动选择 `DC` 或 `MS`。也可以用 `-Tar
 
 ## 组织设置
 
-没有提供 `-OrgSettingsPath` 时，PowerStig 会跳过需要组织自定义值且默认值为空的规则。生产部署前应生成并审核组织设置 XML：
+没有提供 `-OrgSettingsPath` 时，部署与检查共用以下默认配置，无需创建组织设置 XML：完整 USG/DoD 登录警告正文、标题 `DoD Notice and Consent Banner`，以及管理员在安全桌面输入凭据（`ConsentPromptBehaviorAdmin=1`）。适用于 Windows Server 2019/2022/2025 的 DC/MS 和 Windows 10/11；Windows Server 2018 不是受支持的产品名称。
+
+这些默认值在部署工具的 MOF 生成层提供，不修改模块原始 STIG 数据。直接使用 PowerStig DSC 资源时仍使用模块自己的默认值。其他空白组织规则继续跳过，不能将自动检查通过视为完整 STIG 审核。登录交互需在重新登录后验证，部分 UAC 更改需要重启。生产环境应审核法律声明是否适用于本组织。
+
+显式提供 `-OrgSettingsPath` 时，使用该 XML 和基线本身的 UAC 值，不注入上述正文和 UAC 默认值；缺少自动标题规则的平台仍配置默认标题。组织策略需要自定义时，部署与检查必须传入同一文件：
 
 ```powershell
 .\Deploy-PowerStigWindows.ps1 `
@@ -98,6 +102,8 @@ Windows Server 会根据域角色自动选择 `DC` 或 `MS`。也可以用 `-Tar
 ```
 
 同一个 XML 可传给检查脚本，确保部署与检查使用完全相同的基线。
+
+TerraForge `deployOld.ps1` 不再自动创建、填充或读取先前生成的组织设置文件；只有设置 `POWERSTIG_ORG_SETTINGS_PATH` 才显式传入 XML。旧文件不会被删除。脚本和离线包必须一起更新；已有任务完成标记可能导致再次运行被跳过，应按 TerraForge 的重跑流程处理。此变更只恢复上述三项体验，不迁移其他旧版组织默认值。
 
 ## 输出文件
 

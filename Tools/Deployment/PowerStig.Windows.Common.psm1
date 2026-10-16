@@ -444,16 +444,42 @@ configuration PowerStigWindowsConfiguration
             [Parameter(Mandatory = $true)] [string] $OsVersion,
             [Parameter(Mandatory = $true)] [version] $StigVersion,
             [Parameter()] [string] $OsRole,
-            [Parameter()] [string] $OrgSettings
+            [Parameter()] [object] $OrgSettings,
+            [Parameter()] [hashtable] $Exceptions,
+            [Parameter()] [bool] $AddNoticeCaption
         )
 
         Import-DscResource -ModuleName @{ ModuleName = 'PowerStig'; RequiredVersion = '__POWERSTIG_VERSION__' }
+        Import-DscResource -ModuleName PSDscResources -ModuleVersion 2.12.0.0
 
         Node localhost
         {
+            if ($AddNoticeCaption)
+            {
+                Registry DefaultLoginNoticeCaption
+                {
+                    Key = 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+                    ValueName = 'LegalNoticeCaption'
+                    ValueData = 'DoD Notice and Consent Banner'
+                    ValueType = 'String'
+                    Ensure = 'Present'
+                    Force = $true
+                }
+            }
             if ($Technology -eq 'WindowsServer')
             {
-                if ($OrgSettings)
+                if ($OrgSettings -and $Exceptions)
+                {
+                    WindowsServer OperatingSystemStig
+                    {
+                        OsVersion = $OsVersion
+                        OsRole = $OsRole
+                        StigVersion = $StigVersion
+                        OrgSettings = $OrgSettings
+                        Exception = $Exceptions
+                    }
+                }
+                elseif ($OrgSettings)
                 {
                     WindowsServer OperatingSystemStig
                     {
@@ -475,7 +501,17 @@ configuration PowerStigWindowsConfiguration
             }
             else
             {
-                if ($OrgSettings)
+                if ($OrgSettings -and $Exceptions)
+                {
+                    WindowsClient OperatingSystemStig
+                    {
+                        OsVersion = $OsVersion
+                        StigVersion = $StigVersion
+                        OrgSettings = $OrgSettings
+                        Exception = $Exceptions
+                    }
+                }
+                elseif ($OrgSettings)
                 {
                     WindowsClient OperatingSystemStig
                     {
@@ -513,6 +549,43 @@ configuration PowerStigWindowsConfiguration
     {
         $configurationParameters.OrgSettings = $OrgSettingsPath
     }
+    else
+    {
+        $defaultRuleIds = switch ($Target.Target)
+        {
+            'WindowsServer2019' { @('V-205631', 'V-205717', 'V-205632') }
+            'WindowsServer2022' { @('V-254457', 'V-254484', '') }
+            'WindowsServer2025' { @('V-278207', 'V-278234', '') }
+            'Windows10' { @('V-220921', 'V-220945', 'V-220922') }
+            'Windows11' { @('V-253445', 'V-253469', '') }
+            default { throw "No login defaults are defined for '$($Target.Target)'." }
+        }
+        $noticeText = @'
+You are accessing a U.S. Government (USG) Information System (IS) that is provided for USG-authorized use only.
+
+By using this IS (which includes any device attached to this IS), you consent to the following conditions:
+
+-The USG routinely intercepts and monitors communications on this IS for purposes including, but not limited to, penetration testing, COMSEC monitoring, network operations and defense, personnel misconduct (PM), law enforcement (LE), and counterintelligence (CI) investigations.
+-At any time, the USG may inspect and seize data stored on this IS.
+-Communications using, or data stored on, this IS are not private, are subject to routine monitoring, interception, and search, and may be disclosed or used for any USG-authorized purpose.
+-This IS includes security measures (e.g., authentication and access controls) to protect USG interests--not for your personal benefit or privacy.
+-Notwithstanding the above, using this IS does not constitute consent to PM, LE or CI investigative searching or monitoring of the content of privileged communications, or work product, related to personal representation or services by attorneys, psychotherapists, or clergy, and their assistants. Such communications and work product are private and confidential. See User Agreement for details.
+'@
+        $defaultSettings = @{}
+        $defaultSettings[$defaultRuleIds[0]] = @{ ValueData = $noticeText }
+        $defaultSettings[$defaultRuleIds[1]] = @{ ValueData = '1' }
+        if ($defaultRuleIds[2])
+        {
+            $defaultSettings[$defaultRuleIds[2]] = @{ ValueData = 'DoD Notice and Consent Banner' }
+        }
+        $configurationParameters.OrgSettings = $defaultSettings
+    }
+    if (-not $OrgSettingsPath -and $Target.Target -in @('WindowsServer2025', 'Windows10', 'Windows11'))
+    {
+        $configurationParameters.Exceptions = @{}
+        $configurationParameters.Exceptions[$defaultRuleIds[1]] = @{ ValueData = '1' }
+    }
+    $configurationParameters.AddNoticeCaption = $Target.Target -in @('WindowsServer2022', 'WindowsServer2025', 'Windows11')
 
     PowerStigWindowsConfiguration @configurationParameters
     $mofPath = Join-Path -Path $OutputPath -ChildPath 'localhost.mof'
