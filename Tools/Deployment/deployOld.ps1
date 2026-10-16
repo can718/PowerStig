@@ -380,11 +380,20 @@ try {
                 }
                 [xml]$processedStig = Get-Content -LiteralPath $processedFile -Raw
                 $autoFilledIds = [System.Collections.Generic.List[string]]::new()
+                $doDNoticeText = @'
+You are accessing a U.S. Government (USG) Information System (IS) that is provided for USG-authorized use only. By using this IS (which includes any device attached to this IS), you consent to the following conditions:
+-The USG routinely intercepts and monitors communications on this IS for purposes including, but not limited to, penetration testing, COMSEC monitoring, network operations and defense, personnel misconduct (PM), law enforcement (LE), and counterintelligence (CI) investigations.
+-At any time, the USG may inspect and seize data stored on this IS.
+-Communications using, or data stored on, this IS are not private, are subject to routine monitoring, interception, and search, and may be disclosed or used for any USG-authorized purpose.
+-This IS includes security measures (e.g., authentication and access controls) to protect USG interests--not for your personal benefit or privacy.
+-Notwithstanding the above, using this IS does not constitute consent to PM, LE or CI investigative searching or monitoring of the content of privileged communications, or work product, related to personal representation or services by attorneys, psychotherapists, or clergy, and their assistants. Such communications and work product are private and confidential. See User Agreement for details.
+'@
 
                 foreach ($setting in $settingsXml.SelectNodes('/OrganizationalSettings/OrganizationalSetting')) {
                     $id = $setting.GetAttribute('id')
                     $valueAttribute = @($setting.Attributes | Where-Object Name -ne 'id' | Select-Object -First 1)
-                    if (-not $id -or $valueAttribute.Count -eq 0 -or -not [string]::IsNullOrWhiteSpace($valueAttribute[0].Value)) {
+                    $isRequestedLegalNotice = $id -in @('V-205631', 'V-254457', 'V-278207', 'V-220921', 'V-253445')
+                    if (-not $id -or $valueAttribute.Count -eq 0 -or (-not $isRequestedLegalNotice -and -not [string]::IsNullOrWhiteSpace($valueAttribute[0].Value))) {
                         continue
                     }
 
@@ -456,13 +465,7 @@ try {
                             }
                         }
                         { $PSItem -in @('V-205631', 'V-254457', 'V-278207', 'V-220921', 'V-253445') } {
-                            $legalNotice = [string]$currentValue
-                            if (-not [string]::IsNullOrWhiteSpace($legalNotice) -and $legalNotice -notmatch '[\x00-\x08\x0B\x0C\x0E-\x1F]') {
-                                $recommendedValue = $legalNotice
-                            }
-                            else {
-                                $recommendedValue = 'NOTICE: This system is for authorized use only. Unauthorized access or use is prohibited. Activity may be monitored, recorded, and disclosed to authorized personnel. By accessing this system, you consent to such monitoring. Unauthorized use may result in disciplinary action and/or criminal prosecution.'
-                            }
+                            $recommendedValue = $doDNoticeText
                         }
                         'V-278209' {
                             if ([string]$currentValue -in @('1', '2')) { $recommendedValue = [string]$currentValue }
@@ -478,7 +481,7 @@ try {
 
                 if ($autoFilledIds.Count -gt 0) {
                     $settingsXml.Save($settingsPath)
-                    Write-Warn "Prefilled safe/current OrgSettings values for: $($autoFilledIds -join ', '). Review the generated file; domain policy, log-volume, user-profile, and legal-notice choices remain organization-owned."
+                    Write-Warn "Prefilled safe/current OrgSettings values for: $($autoFilledIds -join ', '). Review the generated file; domain policy, log-volume, and user-profile choices remain organization-owned."
                 }
 
                 return $settingsPath
@@ -786,6 +789,13 @@ Write-Output 'OK'
                             -PowerShell51 $powershell51 `
                             -OperatingSystem $script:DetectedOS `
                             -ServerRole $script:DetectedRole
+
+                        $legalNoticeRegistryPath = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+                        if (-not (Test-Path -LiteralPath $legalNoticeRegistryPath)) {
+                            New-Item -Path $legalNoticeRegistryPath -Force | Out-Null
+                        }
+                        Set-ItemProperty -LiteralPath $legalNoticeRegistryPath -Name 'LegalNoticeCaption' -Value 'DoD Notice and Consent Banner' -Type String -Force
+                        Write-OK 'Login legal notice caption set to: DoD Notice and Consent Banner'
 
                         $packageArguments = @(
                             '-NoProfile'
