@@ -1,0 +1,107 @@
+{
+  "SchemaVersion": 3,
+  "ModifiedDate": "2026-10-20",
+  "RunId": "SERVER01-20261020-120000",
+  "ComputerName": "SERVER01",
+  "StartedAt": "2026-10-20T12:00:00.0000000Z",
+  "CompletedAt": "2026-10-20T12:02:00.0000000Z",
+  "Succeeded": true,
+  "InDesiredState": false,
+  "DesiredResourceCount": 241,
+  "NoncompliantResourceCount": 2,
+  "DetailedResultAvailable": true,
+  "RuleResultsAvailable": true,
+  "RuleResultsUnavailableReason": null,
+  "TotalRuleCount": 4,
+  "CompliantRuleCount": 1,
+  "NoncompliantRuleCount": 1,
+  "SkippedRuleCount": 1,
+  "NotApplicableRuleCount": 0,
+  "NotReviewedRuleCount": 1,
+  "ErrorRuleCount": 0,
+  "Target": {
+    "Target": "WindowsServer2022",
+    "Technology": "WindowsServer",
+    "OsVersion": "2022",
+    "ServerRole": "MS",
+    "StigVersion": "2.11"
+  },
+  "Module": {
+    "Name": "PowerStig",
+    "Version": "4.30.0",
+    "Path": "C:\\Baseline\\Modules\\PowerStig\\4.30.0\\PowerStig.psm1"
+  },
+  "Resources": [
+    {
+      "InDesiredState": false,
+      "ResourceId": "[Registry][V-254253.a][medium][SRG-OS-000312-GPOS-00122]::[WindowsServer]OperatingSystemStig",
+      "ModuleName": "PSDscResources",
+      "ModuleVersion": "2.12.0.0",
+      "SourceInfo": "C:\\Baseline\\Modules\\PowerStig\\4.30.0\\DSCResources\\Resources\\windows.Registry.ps1::10::5::Registry",
+      "Error": null,
+      "ComplianceEvaluation": "DSC reported noncompliant"
+    }
+  ],
+  "RuleResults": [
+    {
+      "RuleId": "V-254253",
+      "Title": "SRG-OS-000312-GPOS-00122",
+      "Severity": "medium",
+      "Status": "NonCompliant",
+      "Reason": "[Registry][V-254253.a][medium][SRG-OS-000312-GPOS-00122]::[WindowsServer]OperatingSystemStig: DSC reported noncompliant",
+      "DscResourceIds": [
+        "[Registry][V-254253.a][medium][SRG-OS-000312-GPOS-00122]::[WindowsServer]OperatingSystemStig",
+        "[Registry][V-254253.b][medium][SRG-OS-000312-GPOS-00122]::[WindowsServer]OperatingSystemStig"
+      ],
+      "DscResourceId": "[Registry][V-254253.a][medium][SRG-OS-000312-GPOS-00122]::[WindowsServer]OperatingSystemStig",
+      "ModuleName": "PowerStig",
+      "ModuleVersion": "4.30.0",
+      "SourceInfo": "WindowsServer-2022-MS",
+      "ComplianceEvaluation": "One or more DSC resources reported noncompliant"
+    },
+    {
+      "RuleId": "V-254254",
+      "Title": "SRG-OS-000312-GPOS-00122",
+      "Severity": "medium",
+      "Status": "Compliant",
+      "Reason": "All associated DSC resources are in the desired state.",
+      "DscResourceIds": [
+        "[NTFSAccessEntry][V-254254][medium][SRG-OS-000312-GPOS-00122]::[WindowsServer]OperatingSystemStig"
+      ],
+      "DscResourceId": "[NTFSAccessEntry][V-254254][medium][SRG-OS-000312-GPOS-00122]::[WindowsServer]OperatingSystemStig",
+      "ModuleName": "PowerStig",
+      "ModuleVersion": "4.30.0",
+      "SourceInfo": "WindowsServer-2022-MS",
+      "ComplianceEvaluation": "DSC"
+    },
+    {
+      "RuleId": "V-254285",
+      "Title": "SRG-OS-000329-GPOS-00128",
+      "Severity": "medium",
+      "Status": "NotReviewed",
+      "Reason": "Organization configuration is required, but no organization settings file supplied a value for this rule.",
+      "DscResourceIds": [],
+      "DscResourceId": null,
+      "ModuleName": "PowerStig",
+      "ModuleVersion": "4.30.0",
+      "SourceInfo": "WindowsServer-2022-MS",
+      "ComplianceEvaluation": "Not reviewed because organization configuration is missing"
+    },
+    {
+      "RuleId": "V-254999",
+      "Title": "Sanitized example skipped rule",
+      "Severity": "low",
+      "Status": "Skipped",
+      "Reason": "The rule did not produce a DSC resource in the compiled reference configuration.",
+      "DscResourceIds": [],
+      "DscResourceId": null,
+      "ModuleName": "PowerStig",
+      "ModuleVersion": "4.30.0",
+      "SourceInfo": "WindowsServer-2022-MS",
+      "ComplianceEvaluation": "Skipped during reference configuration compilation"
+    }
+  ],
+  "ResourceCsv": "C:\\Baseline\\Logs\\Test-PowerStig-SERVER01-20261020-120000.resources.csv",
+  "RuleCsv": "C:\\Baseline\\Logs\\Test-PowerStig-SERVER01-20261020-120000.rules.csv",
+  "Error": null
+}

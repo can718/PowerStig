@@ -8,6 +8,7 @@
 - `Test-PowerStigWindowsCompliance.ps1`：合规检查，不应用 STIG 基线；会生成日志/MOF，并可按参数暂存 DSC 模块或配置执行策略。
 - `PowerStig.Windows.Common.psm1`：两个入口共用的系统识别、版本映射、模块准备和 MOF 编译实现。
 - `New-PowerStigOfflinePackage.ps1`：生成只需复制一个 `.ps1` 的自解压离线运行包。
+- `PowerStig-Offline-External-Integration.zh-CN.md`：可直接提供给外部 AI 或报告程序的 Check 模式调用与 Schema v3 数据契约。
 
 两个脚本都会自动切换到 Windows PowerShell 5.1，并生成详细文本日志、Transcript 和 JSON 摘要。检查脚本还会生成逐资源 CSV。
 

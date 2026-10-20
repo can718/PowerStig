@@ -143,8 +143,203 @@ function ConvertTo-DscResourceRecord
         StartDate = if ($startDate) { $Resource.$startDate } else { $null }
         RebootRequested = if ($rebootRequested) { $Resource.$rebootRequested } else { $null }
         SourceInfo = if ($sourceInfo) { [string] $Resource.$sourceInfo } else { $null }
-        Error = if ($resourceError -and $Resource.$resourceError) { [string] ($Resource.$resourceError | Out-String) } else { $null }
+        Error = if ($resourceError -and $Resource.$resourceError) { Protect-ComplianceText $Resource.$resourceError } else { $null }
         ComplianceEvaluation = if ($Desired) { 'DSC' } else { 'DSC reported noncompliant' }
+    }
+}
+
+function Protect-ComplianceText
+{
+    param([AllowNull()] [object] $Value)
+
+    if ($null -eq $Value)
+    {
+        return $null
+    }
+
+    $text = [string] ($Value | Out-String)
+    $text = $text -replace '(?i)(sig|signature|token|password|pwd|secret|key)=([^&\s;]+)', '$1=[REDACTED]'
+    $text = $text -replace '(?i)(SharedAccessSignature\s+)[^\s]+', '$1[REDACTED]'
+    return $text.Trim()
+}
+
+function Get-PowerStigRuleMetadata
+{
+    param(
+        [Parameter(Mandatory = $true)] [psobject] $Target,
+        [Parameter(Mandatory = $true)] [psobject] $Module
+    )
+
+    $moduleRoot = Split-Path -Path $Module.Path -Parent
+    $rolePart = if ($Target.ServerRole) { "-$($Target.ServerRole)" } else { '' }
+    $fileName = '{0}-{1}{2}-{3}.xml' -f $Target.Technology, $Target.OsVersion, $rolePart, $Target.StigVersion
+    $stigPath = Join-Path -Path $moduleRoot -ChildPath (Join-Path -Path 'StigData\Processed' -ChildPath $fileName)
+    if (-not (Test-Path -LiteralPath $stigPath -PathType Leaf))
+    {
+        throw "Processed STIG metadata was not found: $stigPath"
+    }
+
+    [xml] $stigXml = Get-Content -LiteralPath $stigPath -Raw
+    foreach ($rule in @($stigXml.DISASTIG.ChildNodes | ForEach-Object { $PSItem.Rule }))
+    {
+        if ($null -eq $rule -or [string]::IsNullOrWhiteSpace([string] $rule.id))
+        {
+            continue
+        }
+
+        [pscustomobject]@{
+            RuleId = [string] $rule.id
+            Title = [string] $rule.title
+            Severity = [string] $rule.severity
+            DscResource = [string] $rule.dscresource
+            ConversionStatus = [string] $rule.conversionstatus
+            OrganizationValueRequired = [string] $rule.OrganizationValueRequired -eq 'True'
+        }
+    }
+}
+
+function Get-StigRuleIdFromResourceId
+{
+    param(
+        [Parameter(Mandatory = $true)] [string] $ResourceId,
+        [Parameter(Mandatory = $true)] [hashtable] $RuleIndex
+    )
+
+    foreach ($match in [regex]::Matches($ResourceId, '\[(V-\d+(?:\.[A-Za-z0-9]+)?)\]'))
+    {
+        $candidate = $match.Groups[1].Value
+        if ($RuleIndex.ContainsKey($candidate))
+        {
+            return $candidate
+        }
+
+        $baseCandidate = $candidate -replace '\.[A-Za-z0-9]+$', ''
+        if ($RuleIndex.ContainsKey($baseCandidate))
+        {
+            return $baseCandidate
+        }
+    }
+    return $null
+}
+
+function ConvertTo-StigRuleResults
+{
+    param(
+        [Parameter(Mandatory = $true)] [object[]] $RuleMetadata,
+        [Parameter(Mandatory = $true)] [object[]] $Resources,
+        [Parameter(Mandatory = $true)] [string] $ModuleName,
+        [Parameter(Mandatory = $true)] [string] $ModuleVersion,
+        [Parameter(Mandatory = $true)] [string] $SourceInfo,
+        [Parameter()] [string] $OrgSettingsPath
+    )
+
+    $ruleIndex = @{}
+    foreach ($metadata in $RuleMetadata)
+    {
+        $ruleIndex[$metadata.RuleId] = $metadata
+    }
+
+    $organizationRuleIds = @{}
+    if ($OrgSettingsPath)
+    {
+        [xml] $organizationSettings = Get-Content -LiteralPath $OrgSettingsPath -Raw
+        foreach ($setting in @($organizationSettings.SelectNodes('//*[@id]')))
+        {
+            $organizationRuleIds[[string] $setting.id] = $true
+        }
+    }
+
+    $resourcesByRule = @{}
+    foreach ($resource in $Resources)
+    {
+        $ruleId = Get-StigRuleIdFromResourceId -ResourceId $resource.ResourceId -RuleIndex $ruleIndex
+        if (-not $ruleId)
+        {
+            continue
+        }
+        if (-not $resourcesByRule.ContainsKey($ruleId))
+        {
+            $resourcesByRule[$ruleId] = @()
+        }
+        $resourcesByRule[$ruleId] = @($resourcesByRule[$ruleId]) + $resource
+    }
+
+    foreach ($metadata in $RuleMetadata)
+    {
+        $ruleResources = if ($resourcesByRule.ContainsKey($metadata.RuleId)) { @($resourcesByRule[$metadata.RuleId]) } else { @() }
+        $status = 'NotReviewed'
+        $reason = $null
+        $evaluation = $null
+
+        if ($ruleResources.Count -gt 0)
+        {
+            $errors = @($ruleResources | Where-Object { -not [string]::IsNullOrWhiteSpace([string] $PSItem.Error) })
+            $failed = @($ruleResources | Where-Object {
+                -not $PSItem.InDesiredState -and [string]::IsNullOrWhiteSpace([string] $PSItem.Error)
+            })
+            if ($failed.Count -gt 0)
+            {
+                $status = 'NonCompliant'
+                $reason = Protect-ComplianceText (($failed | ForEach-Object {
+                    if ($PSItem.Error) { "$($PSItem.ResourceId): $($PSItem.Error)" } else { "$($PSItem.ResourceId): DSC reported noncompliant" }
+                }) -join '; ')
+                $evaluation = 'One or more DSC resources reported noncompliant'
+            }
+            elseif ($errors.Count -gt 0)
+            {
+                $status = 'Error'
+                $reason = Protect-ComplianceText (($errors | ForEach-Object { "$($PSItem.ResourceId): $($PSItem.Error)" }) -join '; ')
+                $evaluation = 'DSC resource execution failed; compliance could not be determined'
+            }
+            else
+            {
+                $status = 'Compliant'
+                $reason = 'All associated DSC resources are in the desired state.'
+                $evaluation = (($ruleResources | Select-Object -ExpandProperty ComplianceEvaluation -Unique) -join '; ')
+            }
+        }
+        elseif ($metadata.ConversionStatus -match '^(?i:notapplicable|not_applicable)$')
+        {
+            $status = 'NotApplicable'
+            $reason = 'The processed STIG metadata marks this rule as not applicable.'
+            $evaluation = 'Not applicable according to STIG metadata'
+        }
+        elseif ($metadata.ConversionStatus -match '^(?i:skip|skipped)$')
+        {
+            $status = 'Skipped'
+            $reason = 'The processed STIG metadata marks this rule as skipped.'
+            $evaluation = 'Skipped according to STIG metadata'
+        }
+        elseif ($metadata.OrganizationValueRequired -and -not $organizationRuleIds.ContainsKey($metadata.RuleId))
+        {
+            $reason = 'Organization configuration is required, but no organization settings file supplied a value for this rule.'
+            $evaluation = 'Not reviewed because organization configuration is missing'
+        }
+        elseif ($metadata.ConversionStatus -ne 'pass')
+        {
+            $reason = "The rule requires manual review because conversion status is '$($metadata.ConversionStatus)'."
+            $evaluation = 'Manual review required'
+        }
+        else
+        {
+            $status = 'Skipped'
+            $reason = 'The rule did not produce a DSC resource in the compiled reference configuration.'
+            $evaluation = 'Skipped during reference configuration compilation'
+        }
+
+        [pscustomobject]@{
+            RuleId = $metadata.RuleId
+            Title = $metadata.Title
+            Severity = $metadata.Severity
+            Status = $status
+            Reason = $reason
+            DscResourceIds = @($ruleResources | Select-Object -ExpandProperty ResourceId)
+            DscResourceId = if ($ruleResources.Count -gt 0) { [string] $ruleResources[0].ResourceId } else { $null }
+            ModuleName = $ModuleName
+            ModuleVersion = $ModuleVersion
+            SourceInfo = $SourceInfo
+            ComplianceEvaluation = $evaluation
+        }
     }
 }
 
@@ -315,8 +510,9 @@ $script:TextLogPath = Join-Path -Path $LogRoot -ChildPath "Test-PowerStig-$runId
 $transcriptPath = Join-Path -Path $LogRoot -ChildPath "Test-PowerStig-$runId.transcript.log"
 $summaryPath = Join-Path -Path $LogRoot -ChildPath "Test-PowerStig-$runId.summary.json"
 $resourceCsvPath = Join-Path -Path $LogRoot -ChildPath "Test-PowerStig-$runId.resources.csv"
+$ruleCsvPath = Join-Path -Path $LogRoot -ChildPath "Test-PowerStig-$runId.rules.csv"
 $summary = [ordered]@{
-    SchemaVersion = 2
+    SchemaVersion = 3
     ModifiedDate = '2026-10-20'
     RunId = $runId
     ComputerName = $env:COMPUTERNAME
@@ -327,6 +523,15 @@ $summary = [ordered]@{
     DesiredResourceCount = 0
     NoncompliantResourceCount = 0
     DetailedResultAvailable = $false
+    RuleResultsAvailable = $false
+    RuleResultsUnavailableReason = 'The compliance test has not completed.'
+    TotalRuleCount = 0
+    CompliantRuleCount = 0
+    NoncompliantRuleCount = 0
+    SkippedRuleCount = 0
+    NotApplicableRuleCount = 0
+    NotReviewedRuleCount = 0
+    ErrorRuleCount = 0
     Target = $null
     Module = $null
     DscModulesStaged = $false
@@ -335,9 +540,11 @@ $summary = [ordered]@{
     ReferenceMof = $null
     OrgSettingsPath = $null
     Resources = @()
+    RuleResults = @()
     TextLog = $script:TextLogPath
     Transcript = $transcriptPath
     ResourceCsv = $resourceCsvPath
+    RuleCsv = $ruleCsvPath
     Error = $null
     FailureStage = $null
     ExceptionType = $null
@@ -422,6 +629,7 @@ try
     if (-not $detailedResult)
     {
         Write-ComplianceLog -Level WARN -Message 'Reference-mode DSC returned only an overall compliance result; per-resource detail is unavailable for this PowerShell version.'
+        $summary.RuleResultsUnavailableReason = 'Test-DscConfiguration returned only an overall compliance result; per-resource results required for rule evaluation were unavailable.'
     }
 
     $currentStage = 'ResultConversion'
@@ -464,6 +672,32 @@ try
     $summary.NoncompliantResourceCount = $noncompliantResources.Count
     $summary.Resources = $allResources
 
+    if ($detailedResult)
+    {
+        $ruleMetadata = @(Get-PowerStigRuleMetadata -Target $targetInfo -Module $module)
+        $sourceInfo = '{0}-{1}{2}' -f $targetInfo.Technology, $targetInfo.OsVersion, $(if ($targetInfo.ServerRole) { "-$($targetInfo.ServerRole)" } else { '' })
+        $ruleResults = @(ConvertTo-StigRuleResults -RuleMetadata $ruleMetadata -Resources $allResources -ModuleName $module.Name -ModuleVersion ([string] $module.Version) -SourceInfo $sourceInfo -OrgSettingsPath $OrgSettingsPath)
+        $summary.RuleResults = $ruleResults
+        $summary.RuleResultsAvailable = $true
+        $summary.RuleResultsUnavailableReason = $null
+        $summary.TotalRuleCount = $ruleResults.Count
+        $summary.CompliantRuleCount = @($ruleResults | Where-Object Status -eq 'Compliant').Count
+        $summary.NoncompliantRuleCount = @($ruleResults | Where-Object Status -eq 'NonCompliant').Count
+        $summary.SkippedRuleCount = @($ruleResults | Where-Object Status -eq 'Skipped').Count
+        $summary.NotApplicableRuleCount = @($ruleResults | Where-Object Status -eq 'NotApplicable').Count
+        $summary.NotReviewedRuleCount = @($ruleResults | Where-Object Status -eq 'NotReviewed').Count
+        $summary.ErrorRuleCount = @($ruleResults | Where-Object Status -eq 'Error').Count
+        $ruleResults | Select-Object RuleId, Title, Severity, Status, Reason,
+            @{ Name = 'DscResourceIds'; Expression = { $PSItem.DscResourceIds -join ';' } },
+            DscResourceId, ModuleName, ModuleVersion, SourceInfo, ComplianceEvaluation |
+            Export-Csv -LiteralPath $ruleCsvPath -NoTypeInformation -Encoding UTF8
+    }
+    else
+    {
+        'RuleId,Title,Severity,Status,Reason,DscResourceIds,DscResourceId,ModuleName,ModuleVersion,SourceInfo,ComplianceEvaluation' |
+            Set-Content -LiteralPath $ruleCsvPath -Encoding UTF8
+    }
+
     if ($allResources.Count -gt 0)
     {
         $allResources | Export-Csv -LiteralPath $resourceCsvPath -NoTypeInformation -Encoding UTF8
@@ -492,11 +726,15 @@ try
 catch
 {
     $executionErrorRecord = $PSItem
-    $summary.Error = $executionErrorRecord.Exception.Message
+    $summary.Error = Protect-ComplianceText $executionErrorRecord.Exception.Message
     $summary.FailureStage = $currentStage
     $summary.ExceptionType = $executionErrorRecord.Exception.GetType().FullName
-    $summary.ErrorDetails = [string] $executionErrorRecord
-    $summary.ScriptStackTrace = $executionErrorRecord.ScriptStackTrace
+    $summary.ErrorDetails = Protect-ComplianceText $executionErrorRecord
+    $summary.ScriptStackTrace = Protect-ComplianceText $executionErrorRecord.ScriptStackTrace
+    if (-not $summary.RuleResultsAvailable)
+    {
+        $summary.RuleResultsUnavailableReason = "Rule results are unavailable because stage '$currentStage' failed: $($summary.Error)"
+    }
     Write-ComplianceLog -Level ERROR -Message "Stage '$currentStage' failed: $($summary.Error)"
     Write-ComplianceLog -Level ERROR -Message "Exception type: $($summary.ExceptionType)"
     if ($summary.ScriptStackTrace)
@@ -507,9 +745,12 @@ catch
 finally
 {
     $summary.CompletedAt = (Get-Date).ToUniversalTime().ToString('o')
-    $summary | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $summaryPath -Encoding UTF8
+    $summaryTempPath = "$summaryPath.$([guid]::NewGuid().ToString('N')).tmp"
+    $summary | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $summaryTempPath -Encoding UTF8
+    Move-Item -LiteralPath $summaryTempPath -Destination $summaryPath -Force
     Write-ComplianceLog -Level INFO -Message "JSON summary: $summaryPath"
     Write-ComplianceLog -Level INFO -Message "Resource CSV: $resourceCsvPath"
+    Write-ComplianceLog -Level INFO -Message "Rule CSV: $ruleCsvPath"
     Write-ComplianceLog -Level INFO -Message "Transcript: $transcriptPath"
     Stop-Transcript | Out-Null
 }
