@@ -1,65 +1,62 @@
-BeforeAll {
-    $repositoryRoot = Split-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) -Parent
-    $scriptPath = Join-Path $repositoryRoot 'Tools\Deployment\Test-PowerStigWindowsCompliance.ps1'
-    $tokens = $null
-    $parseErrors = $null
-    $scriptAst = [Management.Automation.Language.Parser]::ParseFile($scriptPath, [ref] $tokens, [ref] $parseErrors)
-    if ($parseErrors.Count -gt 0)
-    {
-        throw ($parseErrors.Message -join [Environment]::NewLine)
-    }
+Describe 'Windows Server 2022 compliance equivalence' {
+    BeforeAll {
+        $repositoryRoot = Split-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) -Parent
+        $scriptPath = Join-Path $repositoryRoot 'Tools\Deployment\Test-PowerStigWindowsCompliance.ps1'
+        $tokens = $null
+        $parseErrors = $null
+        $scriptAst = [Management.Automation.Language.Parser]::ParseFile($scriptPath, [ref] $tokens, [ref] $parseErrors)
+        if ($parseErrors.Count -gt 0)
+        {
+            throw ($parseErrors.Message -join [Environment]::NewLine)
+        }
 
-    $functionNames = @(
-        'Protect-ComplianceText',
-        'Get-StigRuleIdFromResourceId',
-        'ConvertTo-StigRuleResults',
-        'Get-IdentitySid',
-        'Test-WindowsServer2022SystemRegistryAcl',
-        'Test-WindowsServer2022SysvolAcl',
-        'Test-WindowsServer2022LdapIntegrity',
-        'Get-WindowsServer2022ComplianceOverride'
-    )
-    $scriptAst.FindAll({
-            param($node)
-            $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -in $functionNames
-        }, $true) | ForEach-Object { . ([scriptblock]::Create($PSItem.Extent.Text)) }
-
-    function Get-RegistryTestRule
-    {
-        param(
-            [string] $Sid,
-            [Security.AccessControl.RegistryRights] $Rights,
-            [Security.AccessControl.InheritanceFlags] $Inheritance,
-            [Security.AccessControl.PropagationFlags] $Propagation
+        $functionNames = @(
+            'Get-IdentitySid',
+            'Test-WindowsServer2022SystemRegistryAcl',
+            'Test-WindowsServer2022SysvolAcl',
+            'Test-WindowsServer2022LdapIntegrity',
+            'Get-WindowsServer2022ComplianceOverride'
         )
+        $scriptAst.FindAll({
+                param($node)
+                $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -in $functionNames
+            }, $true) | ForEach-Object { . ([scriptblock]::Create($PSItem.Extent.Text)) }
 
-        [pscustomobject]@{
-            IdentityReference = [Security.Principal.SecurityIdentifier]::new($Sid)
-            RegistryRights = $Rights
-            InheritanceFlags = $Inheritance
-            PropagationFlags = $Propagation
-            AccessControlType = [Security.AccessControl.AccessControlType]::Allow
-            IsInherited = $false
+        function Get-RegistryTestRule
+        {
+            param(
+                [string] $Sid,
+                [Security.AccessControl.RegistryRights] $Rights,
+                [Security.AccessControl.InheritanceFlags] $Inheritance,
+                [Security.AccessControl.PropagationFlags] $Propagation
+            )
+
+            [pscustomobject]@{
+                IdentityReference = [Security.Principal.SecurityIdentifier]::new($Sid)
+                RegistryRights = $Rights
+                InheritanceFlags = $Inheritance
+                PropagationFlags = $Propagation
+                AccessControlType = [Security.AccessControl.AccessControlType]::Allow
+                IsInherited = $false
+            }
+        }
+
+        function Add-FileTestRule
+        {
+            param($Acl, [string] $Sid, $Rights, $Inheritance, $Propagation)
+
+            $identity = [Security.Principal.SecurityIdentifier]::new($Sid)
+            $rule = [Security.AccessControl.FileSystemAccessRule]::new(
+                $identity,
+                $Rights,
+                $Inheritance,
+                $Propagation,
+                [Security.AccessControl.AccessControlType]::Allow
+            )
+            $Acl.AddAccessRule($rule)
         }
     }
 
-    function Add-FileTestRule
-    {
-        param($Acl, [string] $Sid, $Rights, $Inheritance, $Propagation)
-
-        $identity = [Security.Principal.SecurityIdentifier]::new($Sid)
-        $rule = [Security.AccessControl.FileSystemAccessRule]::new(
-            $identity,
-            $Rights,
-            $Inheritance,
-            $Propagation,
-            [Security.AccessControl.AccessControlType]::Allow
-        )
-        $Acl.AddAccessRule($rule)
-    }
-}
-
-Describe 'Windows Server 2022 compliance equivalence' {
     It 'accepts the secure SYSTEM registry ACL without the optional capability SID' {
         $acl = [pscustomobject]@{
             AreAccessRulesProtected = $true
@@ -135,6 +132,26 @@ Describe 'Windows Server 2022 compliance equivalence' {
 
 Describe 'STIG rule compliance results' {
     BeforeAll {
+        $repositoryRoot = Split-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) -Parent
+        $scriptPath = Join-Path $repositoryRoot 'Tools\Deployment\Test-PowerStigWindowsCompliance.ps1'
+        $tokens = $null
+        $parseErrors = $null
+        $scriptAst = [Management.Automation.Language.Parser]::ParseFile($scriptPath, [ref] $tokens, [ref] $parseErrors)
+        if ($parseErrors.Count -gt 0)
+        {
+            throw ($parseErrors.Message -join [Environment]::NewLine)
+        }
+
+        $functionNames = @(
+            'Protect-ComplianceText',
+            'Get-StigRuleIdFromResourceId',
+            'ConvertTo-StigRuleResults'
+        )
+        $scriptAst.FindAll({
+                param($node)
+                $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -in $functionNames
+            }, $true) | ForEach-Object { . ([scriptblock]::Create($PSItem.Extent.Text)) }
+
         function New-TestMetadata($RuleId, $ConversionStatus = 'pass', $OrganizationValueRequired = $false)
         {
             [pscustomobject]@{
@@ -147,12 +164,12 @@ Describe 'STIG rule compliance results' {
             }
         }
 
-        function New-TestResource($ResourceId, $Desired, $Error = $null)
+        function New-TestResource($ResourceId, $Desired, $ResourceError = $null)
         {
             [pscustomobject]@{
                 ResourceId = $ResourceId
                 InDesiredState = $Desired
-                Error = $Error
+                Error = $ResourceError
                 ComplianceEvaluation = if ($Desired) { 'DSC' } else { 'DSC reported noncompliant' }
             }
         }

@@ -266,7 +266,11 @@ function ConvertTo-StigRuleResults
 
     foreach ($metadata in $RuleMetadata)
     {
-        $ruleResources = if ($resourcesByRule.ContainsKey($metadata.RuleId)) { @($resourcesByRule[$metadata.RuleId]) } else { @() }
+        $ruleResources = @()
+        if ($resourcesByRule.ContainsKey($metadata.RuleId))
+        {
+            $ruleResources = @($resourcesByRule[$metadata.RuleId])
+        }
         $status = 'NotReviewed'
         $reason = $null
         $evaluation = $null
