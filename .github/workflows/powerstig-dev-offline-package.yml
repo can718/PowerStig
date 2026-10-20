@@ -102,14 +102,18 @@ jobs:
               throw 'The offline package does not contain null-safe DSC reboot-result handling.'
           }
 
-            $artifactDirectory = Join-Path $env:RUNNER_TEMP 'PowerStigOfflineArtifact'
-            New-Item -Path $artifactDirectory -ItemType Directory -Force | Out-Null
-            Copy-Item -LiteralPath $package -Destination $artifactDirectory -Force
-            $guide = Join-Path $PWD 'Tools\Deployment\PowerStig-Windows-Operator-Guide.zh-CN.md'
-            if (-not (Test-Path -LiteralPath $guide -PathType Leaf)) {
+          $artifactDirectory = Join-Path $env:RUNNER_TEMP 'PowerStigOfflineArtifact'
+          New-Item -Path $artifactDirectory -ItemType Directory -Force | Out-Null
+          $artifactPackage = Join-Path $artifactDirectory (Split-Path $package -Leaf)
+          Copy-Item -LiteralPath $package -Destination $artifactPackage -Force
+          $packageHash = (Get-FileHash -LiteralPath $artifactPackage -Algorithm SHA256).Hash.ToLowerInvariant()
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "package_hash=$packageHash$([Environment]::NewLine)", [Text.UTF8Encoding]::new($false))
+
+          $guide = Join-Path $PWD 'Tools\Deployment\PowerStig-Windows-Operator-Guide.zh-CN.md'
+          if (-not (Test-Path -LiteralPath $guide -PathType Leaf)) {
               throw "Deployment guide was not found: $guide"
-            }
-            Copy-Item -LiteralPath $guide -Destination (Join-Path $artifactDirectory 'PowerStig-Windows-Deployment-Guide.zh-CN.md') -Force
+          }
+          Copy-Item -LiteralPath $guide -Destination (Join-Path $artifactDirectory 'PowerStig-Windows-Deployment-Guide.zh-CN.md') -Force
 
       - name: Test deployment compilation without applying settings
         shell: powershell
@@ -166,10 +170,40 @@ jobs:
           Write-Host "Compliance check executed successfully. InDesiredState=$($result.InDesiredState); exit code=$checkExitCode."
             $global:LASTEXITCODE = 0
 
-      - name: Upload offline package
+      - name: Upload standalone offline package
+        id: upload-package
         uses: actions/upload-artifact@v4
         with:
           name: PowerStig-Windows-Offline-${{ steps.package.outputs.version }}
-          path: ${{ runner.temp }}/PowerStigOfflineArtifact/
+          path: ${{ runner.temp }}/PowerStigOfflineArtifact/PowerStig-Windows-Offline-${{ steps.package.outputs.version }}.ps1
           if-no-files-found: error
           retention-days: 30
+
+      - name: Upload offline package with deployment guide
+        id: upload-package-with-guide
+        uses: actions/upload-artifact@v4
+        with:
+          name: PowerStig-Windows-Offline-${{ steps.package.outputs.version }}-with-Guide
+          path: |
+            ${{ runner.temp }}/PowerStigOfflineArtifact/PowerStig-Windows-Offline-${{ steps.package.outputs.version }}.ps1
+            ${{ runner.temp }}/PowerStigOfflineArtifact/PowerStig-Windows-Deployment-Guide.zh-CN.md
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish artifact identifiers and hashes
+        shell: powershell
+        run: |
+          @'
+          ## Offline package artifact
+
+          | Property | Value |
+          | --- | --- |
+          | File | `PowerStig-Windows-Offline-${{ steps.package.outputs.version }}.ps1` |
+          | File SHA-256 | `${{ steps.package.outputs.package_hash }}` |
+          | Artifact ID | `${{ steps.upload-package.outputs.artifact-id }}` |
+          | Artifact SHA-256 digest | `${{ steps.upload-package.outputs.artifact-digest }}` |
+          | Download | [Open artifact](${{ steps.upload-package.outputs.artifact-url }}) |
+          | Package + guide artifact ID | `${{ steps.upload-package-with-guide.outputs.artifact-id }}` |
+          | Package + guide SHA-256 digest | `${{ steps.upload-package-with-guide.outputs.artifact-digest }}` |
+          | Package + guide download | [Open artifact](${{ steps.upload-package-with-guide.outputs.artifact-url }}) |
+          '@ | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding utf8
