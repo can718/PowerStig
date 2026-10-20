@@ -104,8 +104,9 @@ jobs:
 
           $artifactDirectory = Join-Path $env:RUNNER_TEMP 'PowerStigOfflineArtifact'
           New-Item -Path $artifactDirectory -ItemType Directory -Force | Out-Null
-          $artifactPackage = Join-Path $artifactDirectory (Split-Path $package -Leaf)
+          $artifactPackage = Join-Path $artifactDirectory 'PowerStig-Windows-Offline.ps1'
           Copy-Item -LiteralPath $package -Destination $artifactPackage -Force
+          Copy-Item -LiteralPath $package -Destination (Join-Path $artifactDirectory (Split-Path $package -Leaf)) -Force
           $packageHash = (Get-FileHash -LiteralPath $artifactPackage -Algorithm SHA256).Hash.ToLowerInvariant()
           [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "package_hash=$packageHash$([Environment]::NewLine)", [Text.UTF8Encoding]::new($false))
 
@@ -174,8 +175,8 @@ jobs:
         id: upload-package
         uses: actions/upload-artifact@v4
         with:
-          name: PowerStig-Windows-Offline-${{ steps.package.outputs.version }}
-          path: ${{ runner.temp }}/PowerStigOfflineArtifact/PowerStig-Windows-Offline-${{ steps.package.outputs.version }}.ps1
+          name: PowerStig-Windows-Offline
+          path: ${{ runner.temp }}/PowerStigOfflineArtifact/PowerStig-Windows-Offline.ps1
           if-no-files-found: error
           retention-days: 30
 
@@ -198,7 +199,7 @@ jobs:
 
           | Property | Value |
           | --- | --- |
-          | File | `PowerStig-Windows-Offline-${{ steps.package.outputs.version }}.ps1` |
+          | File | `PowerStig-Windows-Offline.ps1` |
           | File SHA-256 | `${{ steps.package.outputs.package_hash }}` |
           | Artifact ID | `${{ steps.upload-package.outputs.artifact-id }}` |
           | Artifact SHA-256 digest | `${{ steps.upload-package.outputs.artifact-digest }}` |
