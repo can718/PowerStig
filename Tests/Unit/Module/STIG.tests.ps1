@@ -297,6 +297,21 @@ try
         }
     }
 
+    Describe 'Windows Server 2022 DC ACL handling' {
+        It 'checks the effective SYSVOL default ACL with normalized entries' {
+            $processedPath = Join-Path -Path $script:projectRoot -ChildPath 'source\StigData\Processed\WindowsServer-2022-DC-2.11.xml'
+            [xml] $processedStig = Get-Content -Path $processedPath -Raw
+            $rule = $processedStig.SelectSingleNode("//Rule[@id='V-254392']")
+
+            $rule.dscresource | Should Be 'NTFSAccessEntry'
+            $rule.Force | Should Be 'True'
+            @($rule.AccessControlEntry.Entry).Count | Should Be 5
+            $rule.AccessControlEntry.Entry[0].Inheritance | Should Be 'This folder subfolders and files'
+            $rule.AccessControlEntry.Entry[1].Inheritance | Should Be 'This folder subfolders and files'
+            $rule.AccessControlEntry.Entry[4].Inheritance | Should Be 'Subfolders and files only'
+        }
+    }
+
     Describe 'Stale Log File Entries' {
         It 'Rule IDs that are not present in archived STIG should not exist in associated log file' {
 

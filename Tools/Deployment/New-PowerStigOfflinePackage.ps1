@@ -142,6 +142,9 @@ try
         Copy-Item -LiteralPath $sourcePath -Destination $destinationModuleRoot -Recurse -Force
     }
 
+    $accessControlDscPath = Join-Path -Path $modulesRoot -ChildPath 'AccessControlDsc\1.4.3'
+    & (Join-Path -Path $PSScriptRoot -ChildPath 'Update-AccessControlDsc.ps1') -ModulePath $accessControlDscPath
+
     $embeddedOrgSettings = $false
     if ($OrgSettingsPath)
     {

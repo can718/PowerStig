@@ -4239,56 +4239,28 @@ BUILTIN\Administrators:(I)(F)
           <Type>Allow</Type>
           <Principal>NT AUTHORITY\Authenticated Users</Principal>
           <ForcePrincipal>False</ForcePrincipal>
-          <Inheritance>This folder only</Inheritance>
-          <Rights>ReadAndExecute</Rights>
-        </Entry>
-        <Entry>
-          <Type>Allow</Type>
-          <Principal>NT AUTHORITY\Authenticated Users</Principal>
-          <ForcePrincipal>False</ForcePrincipal>
-          <Inheritance>Subfolders and files only</Inheritance>
+                              <Inheritance>This folder subfolders and files</Inheritance>
           <Rights>ReadAndExecute</Rights>
         </Entry>
         <Entry>
           <Type>Allow</Type>
           <Principal>BUILTIN\Server Operators</Principal>
           <ForcePrincipal>False</ForcePrincipal>
-          <Inheritance>This folder only</Inheritance>
-          <Rights>ReadAndExecute</Rights>
-        </Entry>
-        <Entry>
-          <Type>Allow</Type>
-          <Principal>BUILTIN\Server Operators</Principal>
-          <ForcePrincipal>False</ForcePrincipal>
-          <Inheritance>Subfolders and files only</Inheritance>
+                              <Inheritance>This folder subfolders and files</Inheritance>
           <Rights>ReadAndExecute</Rights>
         </Entry>
         <Entry>
           <Type>Allow</Type>
           <Principal>BUILTIN\Administrators</Principal>
           <ForcePrincipal>False</ForcePrincipal>
-          <Inheritance>This folder only</Inheritance>
-          <Rights>AppendData,ChangePermissions,CreateDirectories,CreateFiles,Delete,DeleteSubdirectoriesAndFiles,ExecuteFile,ListDirectory,Modify,Read,ReadAndExecute,ReadAttributes,ReadData,ReadExtendedAttributes,ReadPermissions,Synchronize,TakeOwnership,Traverse,Write,WriteAttributes,WriteData,WriteExtendedAttributes</Rights>
-        </Entry>
-        <Entry>
-          <Type>Allow</Type>
-          <Principal>BUILTIN\Administrators</Principal>
-          <ForcePrincipal>False</ForcePrincipal>
-          <Inheritance>Subfolders and files only</Inheritance>
+                              <Inheritance>This folder subfolders and files</Inheritance>
           <Rights>FullControl</Rights>
         </Entry>
         <Entry>
           <Type>Allow</Type>
           <Principal>NT AUTHORITY\SYSTEM</Principal>
           <ForcePrincipal>False</ForcePrincipal>
-          <Inheritance>This folder only</Inheritance>
-          <Rights>FullControl</Rights>
-        </Entry>
-        <Entry>
-          <Type>Allow</Type>
-          <Principal>NT AUTHORITY\SYSTEM</Principal>
-          <ForcePrincipal>False</ForcePrincipal>
-          <Inheritance>Subfolders and files only</Inheritance>
+                              <Inheritance>This folder subfolders and files</Inheritance>
           <Rights>FullControl</Rights>
         </Entry>
         <Entry>
