@@ -1,7 +1,7 @@
 Describe 'AccessControlDsc offline package patch' {
     BeforeAll {
         $projectRoot = Split-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) -Parent
-        $sourceModule = Join-Path -Path $projectRoot -ChildPath 'output\AccessControlDSC\1.4.3'
+        $sourceModule = Join-Path -Path $projectRoot -ChildPath 'output\RequiredModules\AccessControlDSC\1.4.3'
         $patchScript = Join-Path -Path $projectRoot -ChildPath 'Tools\Deployment\Update-AccessControlDsc.ps1'
         $patchedModule = Join-Path -Path $TestDrive -ChildPath 'AccessControlDsc\1.4.3'
         New-Item -Path (Split-Path $patchedModule -Parent) -ItemType Directory -Force | Out-Null
