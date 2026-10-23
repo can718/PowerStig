@@ -40,6 +40,10 @@ Describe 'AccessControlDsc offline package patch' {
         (ConvertTo-SidIdentityRegistryAccessRule -Rule $rule).IdentityReference.Value | Should Be $sidValue
     }
 
+    It 'translates account names without the authority prefix' {
+        $script:patchedContent | Should Match ([regex]::Escape("Value.Split('\')[-1]"))
+    }
+
     It 'turns fallback ACL write failures into terminating errors' {
         ([regex]::Matches($script:patchedContent, 'Unable to update registry ACL')).Count | Should Be 2
         $script:patchedContent | Should Not Match '\$message = \$LocalizedData\.AclNotFound -f \$\(\$Rule\.IdentityReference\.Value\)'

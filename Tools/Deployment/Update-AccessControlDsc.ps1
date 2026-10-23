@@ -67,7 +67,8 @@ $sidConversionReplacement = @'
     }
     else
     {
-        $SID = $Rule.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier])
+        # Names such as 'APPLICATION PACKAGE AUTHORITY\ALL APPLICATION PACKAGES' only translate without the authority prefix.
+        $SID = [System.Security.Principal.NTAccount]::new($Rule.IdentityReference.Value.Split('\')[-1]).Translate([System.Security.Principal.SecurityIdentifier])
     }
 '@
 if ([regex]::Matches($content, [regex]::Escape($sidConversionPattern)).Count -ne 1)
