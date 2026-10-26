@@ -591,13 +591,18 @@ function Resolve-PowerStigDscComplianceResult
         [string] $Target,
 
         [Parameter(Mandatory = $true)]
+        [AllowNull()]
+        [AllowEmptyString()]
         [string] $ServerRole,
 
         [Parameter(Mandatory = $true)]
         [object] $Result,
 
         [Parameter()]
-        [scriptblock] $Log
+        [scriptblock] $Log,
+
+        [Parameter()]
+        [scriptblock] $ComplianceOverride
     )
 
     $rawInDesiredState = if ($Result -is [bool]) { [bool] $Result } else { [bool] $Result.InDesiredState }
@@ -614,7 +619,14 @@ function Resolve-PowerStigDscComplianceResult
         $remainingNoncompliantResources = @()
         foreach ($resource in $resourcesNotInDesiredState)
         {
-            $evaluation = Get-WindowsServer2022ComplianceOverride -ResourceId $resource.ResourceId -Log $Log
+            $evaluation = if ($ComplianceOverride)
+            {
+                & $ComplianceOverride $resource.ResourceId
+            }
+            else
+            {
+                Get-WindowsServer2022ComplianceOverride -ResourceId $resource.ResourceId -Log $Log
+            }
             if ($evaluation)
             {
                 $validatedEquivalentResources += [pscustomobject]@{

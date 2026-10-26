@@ -131,7 +131,6 @@ Describe 'Windows Server 2022 compliance equivalence' {
     }
 
     It 'accepts a DSC mismatch only when the SYSVOL permissions are independently equivalent' {
-        Mock Test-WindowsServer2022SysvolAcl { $true }
         $resource = [pscustomobject]@{
             ResourceId = '[NTFSAccessEntry][V-254392][high]::test'
             InDesiredState = $false
@@ -141,8 +140,9 @@ Describe 'Windows Server 2022 compliance equivalence' {
             ResourcesInDesiredState = @()
             ResourcesNotInDesiredState = @($resource)
         }
+        $validator = { param($ResourceId) 'Validated equivalent SYSVOL effective permissions.' }
 
-        $resolved = Resolve-PowerStigDscComplianceResult -Target WindowsServer2022 -ServerRole DC -Result $result
+        $resolved = Resolve-PowerStigDscComplianceResult -Target WindowsServer2022 -ServerRole DC -Result $result -ComplianceOverride $validator
 
         $resolved.InDesiredState | Should -BeTrue
         $resolved.RawInDesiredState | Should -BeFalse
@@ -151,7 +151,6 @@ Describe 'Windows Server 2022 compliance equivalence' {
     }
 
     It 'does not accept other or independently invalid DSC mismatches' {
-        Mock Test-WindowsServer2022SysvolAcl { $false }
         $resource = [pscustomobject]@{
             ResourceId = '[NTFSAccessEntry][V-254392][high]::test'
             InDesiredState = $false
@@ -161,16 +160,20 @@ Describe 'Windows Server 2022 compliance equivalence' {
             ResourcesInDesiredState = @()
             ResourcesNotInDesiredState = @($resource)
         }
+        $rejectOverride = { param($ResourceId) return $null }
 
-        $resolved = Resolve-PowerStigDscComplianceResult -Target WindowsServer2022 -ServerRole DC -Result $result
+        $resolved = Resolve-PowerStigDscComplianceResult -Target WindowsServer2022 -ServerRole DC -Result $result -ComplianceOverride $rejectOverride
         $otherTarget = Resolve-PowerStigDscComplianceResult -Target WindowsServer2025 -ServerRole DC -Result $result
         $summaryOnly = Resolve-PowerStigDscComplianceResult -Target WindowsServer2022 -ServerRole DC -Result $false
+        $clientTarget = Resolve-PowerStigDscComplianceResult -Target Windows11 -ServerRole $null -Result $result
 
         $resolved.InDesiredState | Should -BeFalse
         $resolved.ResourcesNotInDesiredState.Count | Should -Be 1
         $otherTarget.InDesiredState | Should -BeFalse
         $otherTarget.ResourcesNotInDesiredState.Count | Should -Be 1
         $summaryOnly.InDesiredState | Should -BeFalse
+        $clientTarget.InDesiredState | Should -BeFalse
+        $clientTarget.ResourcesNotInDesiredState.Count | Should -Be 1
     }
 }
 
