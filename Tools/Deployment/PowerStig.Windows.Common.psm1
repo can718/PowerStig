@@ -606,8 +606,12 @@ function Resolve-PowerStigDscComplianceResult
     )
 
     $rawInDesiredState = if ($Result -is [bool]) { [bool] $Result } else { [bool] $Result.InDesiredState }
-    $resourcesInDesiredState = if ($Result -is [bool]) { @() } else { @($Result.ResourcesInDesiredState) }
-    $resourcesNotInDesiredState = if ($Result -is [bool]) { @() } else { @($Result.ResourcesNotInDesiredState) }
+    $resourcesInDesiredState = @(
+        if ($Result -isnot [bool]) { $Result.ResourcesInDesiredState }
+    )
+    $resourcesNotInDesiredState = @(
+        if ($Result -isnot [bool]) { $Result.ResourcesNotInDesiredState }
+    )
     $originalNoncompliantCount = $resourcesNotInDesiredState.Count
     $validatedEquivalentResources = @()
 
