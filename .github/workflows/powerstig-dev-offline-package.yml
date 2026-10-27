@@ -74,9 +74,25 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
+
+          $manifest = Import-PowerShellDataFile .\source\PowerStig.psd1
+          $packageSourceRoots = @((Join-Path $PWD 'Tools\Deployment'))
+          $packageSourceRoots += Join-Path $PWD "output\PowerStig\$($manifest.ModuleVersion)"
+          $packageSourceRoots += $manifest.RequiredModules | ForEach-Object {
+            Join-Path $PWD "output\$($_.ModuleName)\$($_.ModuleVersion)"
+          }
+          $logLevelPattern = '(?i)(-Level\s+)([''"]?)Information\2\b'
+          foreach ($scriptFile in Get-ChildItem -Path $packageSourceRoots -Recurse -File -Include *.ps1, *.psm1) {
+            $content = [IO.File]::ReadAllText($scriptFile.FullName)
+            $updatedContent = [regex]::Replace($content, $logLevelPattern, '${1}${2}Info${2}')
+            if ($updatedContent -cne $content) {
+              [IO.File]::WriteAllText($scriptFile.FullName, $updatedContent, [Text.UTF8Encoding]::new($false))
+            }
+          }
+
           .\Tools\Deployment\New-PowerStigOfflinePackage.ps1 -ModuleRoot .\output -Force
 
-          $version = (Import-PowerShellDataFile .\source\PowerStig.psd1).ModuleVersion
+          $version = $manifest.ModuleVersion
           [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "version=$version$([Environment]::NewLine)", [Text.UTF8Encoding]::new($false))
           $package = Join-Path $PWD "Tools\Deployment\Packages\PowerStig-Windows-Offline-$version.ps1"
           if (-not (Test-Path -LiteralPath $package -PathType Leaf)) {
@@ -94,6 +110,13 @@ jobs:
           $metadata = Get-Content (Join-Path $extractRoot 'PackageMetadata.json') -Raw | ConvertFrom-Json
           if (-not $metadata.Modules -or -not (Test-Path (Join-Path $extractRoot 'Scripts\Deploy-PowerStigWindows.ps1'))) {
               throw 'The extracted package is missing required module metadata or deployment entry point.'
+          }
+
+          $invalidLogLevel = Get-ChildItem -Path $extractRoot -Recurse -File -Include *.ps1, *.psm1 |
+            Select-String -Pattern $logLevelPattern |
+            Select-Object -First 1
+          if ($invalidLogLevel) {
+            throw "The offline package contains an incompatible 'Information' log level: $($invalidLogLevel.Path):$($invalidLogLevel.LineNumber)"
           }
 
           $deploymentScript = Get-Content (Join-Path $extractRoot 'Scripts\Deploy-PowerStigWindows.ps1') -Raw
