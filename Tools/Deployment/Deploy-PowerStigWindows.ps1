@@ -222,10 +222,13 @@ try
         {
             throw 'Test-DscConfiguration did not return a reference compliance result.'
         }
-        $summary.InDesiredState = if ($testResult -is [bool]) { [bool] $testResult } else { [bool] $testResult.InDesiredState }
+        $complianceResult = Resolve-PowerStigDscComplianceResult -Target $targetInfo.Target -ServerRole $targetInfo.ServerRole -Result $testResult -Log $logAction
+        $summary.InDesiredState = $complianceResult.InDesiredState
         if ($testResult -isnot [bool])
         {
-            $testedResources = @($testResult.ResourcesInDesiredState) + @($testResult.ResourcesNotInDesiredState)
+            $testedResources = @($complianceResult.ResourcesInDesiredState) +
+                @($complianceResult.ResourcesNotInDesiredState) +
+                @($complianceResult.ValidatedEquivalentResources | ForEach-Object { $PSItem.Resource })
             $rebootResources = @(
                 $testedResources | Where-Object {
                     $null -ne $PSItem -and

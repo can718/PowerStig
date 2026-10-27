@@ -1,7 +1,7 @@
 Describe 'Windows Server 2022 compliance equivalence' {
     BeforeAll {
         $repositoryRoot = Split-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) -Parent
-        $scriptPath = Join-Path $repositoryRoot 'Tools\Deployment\Test-PowerStigWindowsCompliance.ps1'
+        $scriptPath = Join-Path $repositoryRoot 'Tools\Deployment\PowerStig.Windows.Common.psm1'
         $tokens = $null
         $parseErrors = $null
         $scriptAst = [Management.Automation.Language.Parser]::ParseFile($scriptPath, [ref] $tokens, [ref] $parseErrors)
@@ -15,7 +15,8 @@ Describe 'Windows Server 2022 compliance equivalence' {
             'Test-WindowsServer2022SystemRegistryAcl',
             'Test-WindowsServer2022SysvolAcl',
             'Test-WindowsServer2022LdapIntegrity',
-            'Get-WindowsServer2022ComplianceOverride'
+            'Get-WindowsServer2022ComplianceOverride',
+            'Resolve-PowerStigDscComplianceResult'
         )
         $scriptAst.FindAll({
                 param($node)
@@ -127,6 +128,52 @@ Describe 'Windows Server 2022 compliance equivalence' {
         Mock Test-WindowsServer2022SysvolAcl { $false }
 
         Get-WindowsServer2022ComplianceOverride '[NTFSAccessEntry][V-254392][high]::test' | Should -BeNullOrEmpty
+    }
+
+    It 'accepts a DSC mismatch only when the SYSVOL permissions are independently equivalent' {
+        $resource = [pscustomobject]@{
+            ResourceId = '[NTFSAccessEntry][V-254392][high]::test'
+            InDesiredState = $false
+        }
+        $result = [pscustomobject]@{
+            InDesiredState = $false
+            ResourcesInDesiredState = @()
+            ResourcesNotInDesiredState = @($resource)
+        }
+        $validator = { param($ResourceId) 'Validated equivalent SYSVOL effective permissions.' }
+
+        $resolved = Resolve-PowerStigDscComplianceResult -Target WindowsServer2022 -ServerRole DC -Result $result -ComplianceOverride $validator
+
+        $resolved.InDesiredState | Should -BeTrue
+        $resolved.RawInDesiredState | Should -BeFalse
+        $resolved.ValidatedEquivalentResources.Count | Should -Be 1
+        $resolved.ResourcesNotInDesiredState.Count | Should -Be 0
+    }
+
+    It 'does not accept other or independently invalid DSC mismatches' {
+        $resource = [pscustomobject]@{
+            ResourceId = '[NTFSAccessEntry][V-254392][high]::test'
+            InDesiredState = $false
+        }
+        $result = [pscustomobject]@{
+            InDesiredState = $false
+            ResourcesInDesiredState = @()
+            ResourcesNotInDesiredState = @($resource)
+        }
+        $rejectOverride = { param($ResourceId) return $null }
+
+        $resolved = Resolve-PowerStigDscComplianceResult -Target WindowsServer2022 -ServerRole DC -Result $result -ComplianceOverride $rejectOverride
+        $otherTarget = Resolve-PowerStigDscComplianceResult -Target WindowsServer2025 -ServerRole DC -Result $result
+        $summaryOnly = Resolve-PowerStigDscComplianceResult -Target WindowsServer2022 -ServerRole DC -Result $false
+        $clientTarget = Resolve-PowerStigDscComplianceResult -Target Windows11 -ServerRole $null -Result $result
+
+        $resolved.InDesiredState | Should -BeFalse
+        $resolved.ResourcesNotInDesiredState.Count | Should -Be 1
+        $otherTarget.InDesiredState | Should -BeFalse
+        $otherTarget.ResourcesNotInDesiredState.Count | Should -Be 1
+        $summaryOnly.InDesiredState | Should -BeFalse
+        $clientTarget.InDesiredState | Should -BeFalse
+        $clientTarget.ResourcesNotInDesiredState.Count | Should -Be 1
     }
 }
 

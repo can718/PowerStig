@@ -347,165 +347,6 @@ function ConvertTo-StigRuleResults
     }
 }
 
-function Get-IdentitySid
-{
-    param([object] $IdentityReference)
-
-    try
-    {
-        return $IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value
-    }
-    catch
-    {
-        return [string] $IdentityReference
-    }
-}
-
-function Test-WindowsServer2022SystemRegistryAcl
-{
-    $acl = Get-Acl -Path 'HKLM:\SYSTEM'
-    if (-not $acl.AreAccessRulesProtected)
-    {
-        return $false
-    }
-
-    $expected = @{
-        'S-1-3-0' = @([int][Security.AccessControl.RegistryRights]::FullControl, 1, 2)
-        'S-1-5-11' = @([int][Security.AccessControl.RegistryRights]::ReadKey, 1, 0)
-        'S-1-5-18' = @([int][Security.AccessControl.RegistryRights]::FullControl, 1, 0)
-        'S-1-5-32-544' = @([int][Security.AccessControl.RegistryRights]::FullControl, 1, 0)
-        'S-1-5-32-549' = @([int][Security.AccessControl.RegistryRights]::ReadKey, 1, 0)
-        'S-1-15-2-1' = @([int][Security.AccessControl.RegistryRights]::ReadKey, 1, 0)
-    }
-    $optionalCapabilitySid = 'S-1-15-3-1024-1065365936-1281604716-3511738428-1654721687-432734479-3232135806-4053264122-3456934681'
-    $seen = @{}
-
-    foreach ($entry in @($acl.Access))
-    {
-        $sid = Get-IdentitySid -IdentityReference $entry.IdentityReference
-        if ($sid -eq $optionalCapabilitySid)
-        {
-            if ([int] $entry.RegistryRights -ne [int][Security.AccessControl.RegistryRights]::ReadKey -or
-                [int] $entry.InheritanceFlags -ne 1 -or [int] $entry.PropagationFlags -ne 0 -or
-                $entry.AccessControlType -ne [Security.AccessControl.AccessControlType]::Allow -or $entry.IsInherited)
-            {
-                return $false
-            }
-            continue
-        }
-        if (-not $expected.ContainsKey($sid) -or $seen.ContainsKey($sid))
-        {
-            return $false
-        }
-
-        $required = $expected[$sid]
-        if ([int] $entry.RegistryRights -ne $required[0] -or
-            [int] $entry.InheritanceFlags -ne $required[1] -or
-            [int] $entry.PropagationFlags -ne $required[2] -or
-            $entry.AccessControlType -ne [Security.AccessControl.AccessControlType]::Allow -or $entry.IsInherited)
-        {
-            return $false
-        }
-        $seen[$sid] = $true
-    }
-
-    return $seen.Count -eq $expected.Count
-}
-
-function Test-WindowsServer2022SysvolAcl
-{
-    $acl = Get-Acl -Path (Join-Path -Path $env:windir -ChildPath 'SYSVOL')
-    if (-not $acl.AreAccessRulesProtected)
-    {
-        return $false
-    }
-
-    $readAndExecute = [int][Security.AccessControl.FileSystemRights]::ReadAndExecute -bor [int][Security.AccessControl.FileSystemRights]::Synchronize
-    $fullControl = [int][Security.AccessControl.FileSystemRights]::FullControl
-    $expected = @{
-        'S-1-3-0' = @(0, $fullControl, $fullControl)
-        'S-1-5-11' = @($readAndExecute, $readAndExecute, $readAndExecute)
-        'S-1-5-18' = @($fullControl, $fullControl, $fullControl)
-        'S-1-5-32-544' = @($fullControl, $fullControl, $fullControl)
-        'S-1-5-32-549' = @($readAndExecute, $readAndExecute, $readAndExecute)
-    }
-    $effective = @{}
-    foreach ($sid in $expected.Keys)
-    {
-        $effective[$sid] = @(0, 0, 0)
-    }
-
-    foreach ($entry in @($acl.Access))
-    {
-        $sid = Get-IdentitySid -IdentityReference $entry.IdentityReference
-        if (-not $expected.ContainsKey($sid) -or
-            $entry.AccessControlType -ne [Security.AccessControl.AccessControlType]::Allow -or
-            $entry.IsInherited -or
-            ($entry.PropagationFlags -band [Security.AccessControl.PropagationFlags]::NoPropagateInherit))
-        {
-            return $false
-        }
-
-        $rights = [int] $entry.FileSystemRights
-        if (-not ($entry.PropagationFlags -band [Security.AccessControl.PropagationFlags]::InheritOnly))
-        {
-            $effective[$sid][0] = $effective[$sid][0] -bor $rights
-        }
-        if ($entry.InheritanceFlags -band [Security.AccessControl.InheritanceFlags]::ContainerInherit)
-        {
-            $effective[$sid][1] = $effective[$sid][1] -bor $rights
-        }
-        if ($entry.InheritanceFlags -band [Security.AccessControl.InheritanceFlags]::ObjectInherit)
-        {
-            $effective[$sid][2] = $effective[$sid][2] -bor $rights
-        }
-    }
-
-    foreach ($sid in $expected.Keys)
-    {
-        if ($effective[$sid][0] -ne $expected[$sid][0] -or
-            $effective[$sid][1] -ne $expected[$sid][1] -or
-            $effective[$sid][2] -ne $expected[$sid][2])
-        {
-            return $false
-        }
-    }
-    return $true
-}
-
-function Test-WindowsServer2022LdapIntegrity
-{
-    $key = Get-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\NTDS\Parameters'
-    return $key.GetValueKind('LDAPServerIntegrity') -eq [Microsoft.Win32.RegistryValueKind]::DWord -and
-        [int] $key.GetValue('LDAPServerIntegrity') -eq 2
-}
-
-function Get-WindowsServer2022ComplianceOverride
-{
-    param([string] $ResourceId)
-
-    try
-    {
-        switch -Regex ($ResourceId)
-        {
-            '\[V-254254\.c\]' {
-                if (Test-WindowsServer2022SystemRegistryAcl) { return 'Validated equivalent registry ACL; the optional capability SID may be absent.' }
-            }
-            '\[V-254392\]' {
-                if (Test-WindowsServer2022SysvolAcl) { return 'Validated equivalent SYSVOL effective permissions after Windows ACL normalization.' }
-            }
-            '\[V-254416\]' {
-                if (Test-WindowsServer2022LdapIntegrity) { return 'Validated LDAPServerIntegrity as DWORD 2.' }
-            }
-        }
-    }
-    catch
-    {
-        Write-ComplianceLog -Level WARN -Message "Independent validation failed for ${ResourceId}: $($PSItem.Exception.Message)"
-    }
-    return $null
-}
-
 $logAction = { param($Level, $Message) Write-ComplianceLog -Level $Level -Message $Message }
 New-Item -Path $OutputRoot -ItemType Directory -Force | Out-Null
 New-Item -Path $LogRoot -ItemType Directory -Force | Out-Null
@@ -645,28 +486,18 @@ try
         $desiredResources = @($detailedResult.ResourcesInDesiredState | ForEach-Object { ConvertTo-DscResourceRecord -Resource $PSItem -Desired $true } | Where-Object { $null -ne $PSItem })
         $noncompliantResources = @($detailedResult.ResourcesNotInDesiredState | ForEach-Object { ConvertTo-DscResourceRecord -Resource $PSItem -Desired $false } | Where-Object { $null -ne $PSItem })
 
-        if ($targetInfo.Target -eq 'WindowsServer2022' -and $targetInfo.ServerRole -eq 'DC')
+        $resolvedCompliance = Resolve-PowerStigDscComplianceResult -Target $targetInfo.Target -ServerRole $targetInfo.ServerRole -Result ([pscustomobject]@{
+                InDesiredState = $referenceInDesiredState
+                ResourcesInDesiredState = $desiredResources
+                ResourcesNotInDesiredState = $noncompliantResources
+            }) -Log $logAction
+        $referenceInDesiredState = $resolvedCompliance.InDesiredState
+        $noncompliantResources = @($resolvedCompliance.ResourcesNotInDesiredState)
+        foreach ($equivalentResource in $resolvedCompliance.ValidatedEquivalentResources)
         {
-            $validatedEquivalentResources = @()
-            $remainingNoncompliantResources = @()
-            foreach ($resource in $noncompliantResources)
-            {
-                $evaluation = Get-WindowsServer2022ComplianceOverride -ResourceId $resource.ResourceId
-                if ($evaluation)
-                {
-                    $resource.InDesiredState = $true
-                    $resource.ComplianceEvaluation = $evaluation
-                    $validatedEquivalentResources += $resource
-                    Write-ComplianceLog -Level INFO -Message "EQUIVALENT: $($resource.ResourceId); $evaluation"
-                }
-                else
-                {
-                    $remainingNoncompliantResources += $resource
-                }
-            }
-            $desiredResources = @($desiredResources + $validatedEquivalentResources)
-            $noncompliantResources = @($remainingNoncompliantResources)
-            $referenceInDesiredState = $noncompliantResources.Count -eq 0
+            $equivalentResource.Resource.InDesiredState = $true
+            $equivalentResource.Resource.ComplianceEvaluation = $equivalentResource.Evaluation
+            $desiredResources += $equivalentResource.Resource
         }
     }
     $allResources = @($desiredResources + $noncompliantResources)

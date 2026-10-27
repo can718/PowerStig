@@ -48,6 +48,22 @@ if ([regex]::Matches($content, [regex]::Escape($parameterPattern)).Count -ne 1)
 }
 $content = $content.Replace($parameterPattern, $parameterReplacement)
 
+$inheritancePattern = '$Inheritance = Get-RegistryRuleInheritenceFlag -Inheritance $ace.Inheritance'
+$inheritanceReplacement = @'
+$Inheritance = Get-RegistryRuleInheritenceFlag -Inheritance $ace.Inheritance
+        $creatorOwner = [System.Security.Principal.SecurityIdentifier]::new('S-1-3-0')
+        $creatorOwnerName = $creatorOwner.Translate([System.Security.Principal.NTAccount]).Value
+        if ($IdentityRef.Value -in @($creatorOwner.Value, $creatorOwnerName) -and $Inheritance.InheritanceFlag -eq '1' -and $Inheritance.PropagationFlag -eq '0')
+        {
+            $Inheritance.PropagationFlag = '2'
+        }
+'@
+if ([regex]::Matches($content, [regex]::Escape($inheritancePattern)).Count -ne 1)
+{
+    throw 'The AccessControlDsc RegistryAccessEntry inheritance construction did not match the expected 1.4.3 source.'
+}
+$content = $content.Replace($inheritancePattern, $inheritanceReplacement)
+
 $sidConversionPattern = @'
     if ($Rule.IdentityReference.Value.Contains('\'))
     {
@@ -67,7 +83,8 @@ $sidConversionReplacement = @'
     }
     else
     {
-        $SID = $Rule.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier])
+        # Names such as 'APPLICATION PACKAGE AUTHORITY\ALL APPLICATION PACKAGES' only translate without the authority prefix.
+        $SID = [System.Security.Principal.NTAccount]::new($Rule.IdentityReference.Value.Split('\')[-1]).Translate([System.Security.Principal.SecurityIdentifier])
     }
 '@
 if ([regex]::Matches($content, [regex]::Escape($sidConversionPattern)).Count -ne 1)
@@ -75,6 +92,35 @@ if ([regex]::Matches($content, [regex]::Escape($sidConversionPattern)).Count -ne
     throw 'The AccessControlDsc RegistryAccessEntry SID conversion did not match the expected 1.4.3 source.'
 }
 $content = $content.Replace($sidConversionPattern, $sidConversionReplacement)
+
+$rightsPattern = '$SIDRule = [System.Security.AccessControl.RegistryAccessRule]::new($SID, $Rule.RegistryRights.value__, $Rule.InheritanceFlags.value__, $Rule.PropagationFlags.value__, $Rule.AccessControlType.value__)'
+$rightsReplacement = @'
+$accessMask = [int64] $Rule.RegistryRights.value__ -band 0xFFFFFFFFL
+    $registryRights = $accessMask -band 0x0FFFFFFFL
+    if ($accessMask -band 0x80000000L)
+    {
+        $registryRights = $registryRights -bor [int64] [System.Security.AccessControl.RegistryRights]::ReadKey
+    }
+    if ($accessMask -band 0x40000000L)
+    {
+        $registryRights = $registryRights -bor [int64] [System.Security.AccessControl.RegistryRights]::WriteKey
+    }
+    if ($accessMask -band 0x20000000L)
+    {
+        $registryRights = $registryRights -bor [int64] [System.Security.AccessControl.RegistryRights]::ExecuteKey
+    }
+    if ($accessMask -band 0x10000000L)
+    {
+        $registryRights = $registryRights -bor [int64] [System.Security.AccessControl.RegistryRights]::FullControl
+    }
+    $mappedRights = [System.Security.AccessControl.RegistryRights] $registryRights
+    $SIDRule = [System.Security.AccessControl.RegistryAccessRule]::new($SID, $mappedRights, $Rule.InheritanceFlags, $Rule.PropagationFlags, $Rule.AccessControlType)
+'@
+if ([regex]::Matches($content, [regex]::Escape($rightsPattern)).Count -ne 1)
+{
+    throw 'The AccessControlDsc RegistryAccessEntry rights conversion did not match the expected 1.4.3 source.'
+}
+$content = $content.Replace($rightsPattern, $rightsReplacement)
 
 $failureHandlers = @(
     @{
